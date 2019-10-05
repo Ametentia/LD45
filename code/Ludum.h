@@ -4,6 +4,7 @@
 #include "Ludum_Types.h"
 #include "Ludum_Platform.h"
 #include "Ludum_Maths.h"
+#include "Ludum_Sockets.h"
 
 struct Game_State {
     sfTexture *board_texture;
