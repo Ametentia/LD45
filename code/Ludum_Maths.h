@@ -3,6 +3,8 @@
 
 #include <math.h>
 
+#define Abs(x) ((x) < 0 ? -(x) : (x))
+
 inline f32 Sin(f32 angle) {
     f32 result = sinf(angle);
     return result;

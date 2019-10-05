@@ -1,0 +1,16 @@
+if !exists('g:ProjectName') || g:ProjectName != "Ludum" 
+    let g:ProjectName = "Ludum"
+
+    echo "Opening Project: " . g:ProjectName . "..."
+
+    silent args *.cpp *.h
+    silent bd 1
+    silent vsplit
+    silent wincmd w
+    if exists('g:PlatformPrefix')
+        silent exe "b" "SFML_" . g:ProjectName . ".cpp"
+    else
+        call PrintError("Project Error: Unkown Platform")
+    endif
+endif
+

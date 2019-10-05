@@ -2,9 +2,12 @@
     #include <windows.h>
 #endif
 
+#include <time.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <SFML/System.h>
 #include <SFML/Graphics.h>
+#include <SFML/Audio.h>
 
 #include "Ludum.h"
 
@@ -62,6 +65,8 @@ int WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int n
 int main(int argc, char **argv) {
 #endif
 
+    srand(time(0));
+
     // Create window
     sfVideoMode mode = { 1280, 720, 32 };
     //sfVideoMode mode = { 1920, 1080, 32 };
@@ -86,13 +91,7 @@ int main(int argc, char **argv) {
     Game_State __state = {};
     Game_State *state = &__state;
 
-    state->board_texture = sfTexture_createFromFile("data/board.png", 0);
-    state->card_texture = sfTexture_createFromFile("data/sap_life.png", 0);
-    Assert(state->card_texture && state->board_texture);
-    sfTexture_setSmooth(state->card_texture, true);
-    sfTexture_generateMipmap(state->card_texture);
-    sfTexture_setSmooth(state->board_texture, true);
-    sfTexture_generateMipmap(state->board_texture);
+    InitialiseAssetManager(&state->assets, 256);
 
     global_running = true;
 

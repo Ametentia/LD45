@@ -7,7 +7,7 @@ fi
 
 pushd "../build" > /dev/null
 
-COMMON_CXX_FLAGS="-O0 -g -ggdb -Wno-writable-strings -Wno-switch"
+COMMON_CXX_FLAGS="-O0 -g -ggdb -Wno-writable-strings -Wno-switch -DLUDUM_WINDOWS=1"
 INCLUDE="-isystem ../libs/CSFML/include"
 LIBS="-L../libs/CSFML/lib -lcsfml-graphics-d -lcsfml-window-d -lcsfml-system-d"
 
