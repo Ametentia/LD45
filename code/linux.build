@@ -1,0 +1,16 @@
+#!/bin/bash
+
+if [ ! -d "../build" ];
+then
+    mkdir "../build"
+fi
+
+pushd "../build" > /dev/null
+
+COMMON_CXX_FLAGS="-O0 -g -ggdb -Wno-writable-strings -Wno-switch"
+INCLUDE="-isystem ../libs/CSFML/include"
+LIBS="-L../libs/CSFML/lib -lcsfml-graphics -lcsfml-window -lcsfml-system -lGL"
+
+clang++ $COMMON_CXX_FLAGS $INCLUDE ../code/SFML_Ludum.cpp -o SFML_Ludum.bin $LIBS
+
+popd > /dev/null
