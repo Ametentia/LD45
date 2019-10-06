@@ -1,6 +1,8 @@
 libs/
 build/
 
+*.include
+
 LD45/
 .vscode/
 

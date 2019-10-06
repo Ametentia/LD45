@@ -5,9 +5,12 @@
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+// @Note: SFML stuff gets included here
 #include <SFML/System.h>
 #include <SFML/Graphics.h>
 #include <SFML/Audio.h>
+#include <SFML/Network.h>
 
 #include "Ludum.h"
 
@@ -19,7 +22,6 @@ global u32 global_window_width;
 global u32 global_window_height;
 
 #include "Ludum.cpp"
-#include "Ludum_Sockets.cpp"
 
 internal void SFMLProcessButton(Game_Button *current, Game_Button prev, bool pressed) {
     current->pressed = pressed;
@@ -36,6 +38,7 @@ internal void SFMLGetInput(Game_Input *current, Game_Input *prev) {
                 global_window_height = event.size.height;
             }
             break;
+            default: {} break;
         }
     }
 

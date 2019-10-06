@@ -7,7 +7,10 @@ fi
 
 pushd "../build" > /dev/null
 
-COMMON_CXX_FLAGS="-O0 -g -ggdb -Wno-writable-strings -Wno-switch -DLUDUM_WINDOWS=1"
+# @Hack: To get unix find to work over windows find
+/bin/find ../data/cards -name "*.png" -printf "    \"data/cards/%P\",\n" | sort > "../code/Generated_Texture_Names.include"
+
+COMMON_CXX_FLAGS="-O0 -g -ggdb -Wno-writable-strings -DLUDUM_WINDOWS=1"
 INCLUDE="-isystem ../libs/CSFML/include"
 LIBS="-L../libs/CSFML/lib -lcsfml-graphics-d -lcsfml-window-d -lcsfml-system-d"
 
