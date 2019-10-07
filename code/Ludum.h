@@ -32,22 +32,37 @@ enum Card_Type {
     CardType_AlternateReality,
     CardType_Altruism,
     CardType_BallAndChain,
+    CardType_Barrier,
     CardType_BestIntentions,
     CardType_BlackHole,
     CardType_BloodPact,
     CardType_BoundByTime,
     CardType_Charity,
+    CardType_CompleteMeltdown,
     CardType_DarkRitual,
     CardType_DarknessOfSpace,
+    CardType_DazzlingLight,
     CardType_DevilsWheel,
+    CardType_Emc2,
+    CardType_EmptyManaCrystal,
+    CardType_EnergyInefficient,
     CardType_EventHorizon,
+    CardType_FootingTheBill,
     CardType_ForcedSalvation,
     CardType_GravitationalPull,
     CardType_LuckyFeeling,
+    CardType_Malfunction,
+    CardType_ManaErosion,
+    CardType_ManaStarved,
+    CardType_MiracleMachine,
     CardType_NostalgiaTrip,
+    CardType_NotPlayingAlong,
+    CardType_Overdrive,
+    CardType_OverflowingEnergy,
     CardType_OwnInterests,
     CardType_Pebbles,
     CardType_PlayingDumb,
+    CardType_PowerSurge,
     CardType_Premonition,
     CardType_PureAnarchy,
     CardType_Recursion,
@@ -103,9 +118,14 @@ struct Player {
     s32 health;
     s32 last_turn_health;
 
-    u32 mana;
-    u32 max_mana;
+    f32 card_use_time;
 
+    s32 temp_mana_change;
+    s32 mana;
+    s32 max_mana;
+
+    bool set_attack_mod; // @Hack: For resetting back to 1
+    f32 attack_modifier; // Usually 1, 2 for complete meltdown
     u32 state_flags;
     u32 select_card_count;
     u32 current_selected_count;
@@ -121,7 +141,7 @@ struct Player {
 
     u32 next_card_index; // @Note: The next card to draw
     s32 cards_left;
-    Card deck[24];
+    Card deck[40];
 
     u32 turn_used_count;
     u32 last_turn_used_count;
@@ -130,6 +150,14 @@ struct Player {
 
     u32 active_card_count;
     Card_Type active_cards[20];
+
+    bool has_card;
+    f32 used_card_display_time;
+    f32 used_card_display_y_offset;
+    Image_Handle used_card_image;
+
+    f32 clear_out_time;
+    bool cleared_out;
 };
 
 enum Turn_Phase {
@@ -155,20 +183,146 @@ struct Game_State {
     bool initialised;
     Asset_Manager assets;
 
+    bool in_menu;
+
     Card_Index card_index;
     Board_State board;
 
+    Image_Handle inverted_start_image;
+    Image_Handle start_image;
+    Image_Handle menu_image;
+    Image_Handle confirm_image;
+    Image_Handle mana_image;
+    Image_Handle end_turn_image;
     Image_Handle glow_image;
     Image_Handle shadow_image;
     Image_Handle board_image;
 
     Font_Handle system_font;
 
+    v2 confim_button_size;
+
     // @Note: There are always 2 players
     Player *players;
     s32 dragging_index;
     bool dragging;
+
+    v2 end_turn_pos;
+    v2 end_turn_size;
 };
 
+// @Todo: List the decks.. Then we can copy them into players decks and shuffle
+const static Card_Type energy_deck[] = {
+    CardType_Barrier,
+    CardType_Barrier,
+    CardType_CompleteMeltdown,
+    CardType_CompleteMeltdown,
+    CardType_DazzlingLight,
+    CardType_DazzlingLight,
+    CardType_Emc2,
+    CardType_Emc2,
+    CardType_EnergyInefficient,
+    CardType_EnergyInefficient,
+    CardType_FootingTheBill,
+    CardType_FootingTheBill,
+    CardType_Malfunction,
+    CardType_Malfunction,
+    CardType_ManaErosion,
+    CardType_ManaErosion,
+    CardType_ManaStarved,
+    CardType_ManaStarved,
+    CardType_MiracleMachine,
+    CardType_MiracleMachine,
+    CardType_NotPlayingAlong,
+    CardType_NotPlayingAlong,
+    CardType_Overdrive,
+    CardType_Overdrive,
+    CardType_OverflowingEnergy,
+    CardType_PowerSurge,
+    CardType_PowerSurge,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+    CardType_Sacrifice
+};
+
+const static Card_Type time_and_space_deck[] = {
+    CardType_AlternateReality,
+    CardType_AlternateReality,
+    CardType_BlackHole,
+    CardType_BlackHole,
+    CardType_BoundByTime,
+    CardType_BoundByTime,
+    CardType_DarknessOfSpace,
+    CardType_DarknessOfSpace,
+    CardType_EventHorizon,
+    CardType_EventHorizon,
+    CardType_GravitationalPull,
+    CardType_GravitationalPull,
+    CardType_NostalgiaTrip,
+    CardType_NostalgiaTrip,
+    CardType_Premonition,
+    CardType_Premonition,
+    CardType_Recursion,
+    CardType_Recursion,
+    CardType_Rewind,
+    CardType_Rewind,
+    CardType_SpaceDebris,
+    CardType_SpaceDebris,
+    CardType_TimeBomb,
+    CardType_TimeBomb,
+    CardType_TimeHealsAllWounds,
+    CardType_TimeHealsAllWounds,
+    CardType_WormHole,
+    CardType_WormHole,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+    CardType_Sacrifice
+};
+
+const static Card_Type chaos_deck[] = {
+    CardType_Altruism,
+    CardType_Altruism,
+    CardType_BallAndChain,
+    CardType_BallAndChain,
+    CardType_BestIntentions,
+    CardType_BestIntentions,
+    CardType_BloodPact,
+    CardType_BloodPact,
+    CardType_Charity,
+    CardType_Charity,
+    CardType_DarkRitual,
+    CardType_DarkRitual,
+    CardType_DevilsWheel,
+    CardType_DevilsWheel,
+    CardType_ForcedSalvation,
+    CardType_ForcedSalvation,
+    CardType_LuckyFeeling,
+    CardType_LuckyFeeling,
+    CardType_OwnInterests,
+    CardType_OwnInterests,
+    CardType_PlayingDumb,
+    CardType_PlayingDumb,
+    CardType_PureAnarchy,
+    CardType_PureAnarchy,
+    CardType_SapLife,
+    CardType_SapLife,
+    CardType_UnendingTorment,
+    CardType_UnendingTorment,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+    CardType_Sacrifice,
+};
 
 #endif  // LUDUM_H_

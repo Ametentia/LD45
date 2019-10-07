@@ -70,22 +70,30 @@ internal CARD_EFFECT(SapLife) {
     // Lose 3 health
     // Mana cost: 0
 
-    player->health -= 3;
-    state->sacrifice_damage_this_turn += 3;
+    if (HasActiveCard(player, CardType_Barrier)) { return; }
 
-    if (HasActiveCard(enemy, CardType_ForcedSalvation)) { enemy->health += 3; }
-    if (HasActiveCard(player, CardType_BloodPact)) { enemy->health -= 3; }
+    u32 overall_damage = player->attack_modifier * 3;
+
+    player->health -= overall_damage;
+    state->sacrifice_damage_this_turn += overall_damage;
+
+    if (HasActiveCard(enemy, CardType_ForcedSalvation)) { enemy->health += overall_damage; }
+    if (HasActiveCard(player, CardType_BloodPact)) { enemy->health -= overall_damage; }
 }
 
 internal CARD_EFFECT(Sacrifice) {
     // Lose 3 health
     // Mana cost: 0
 
-    player->health -= 3;
-    state->sacrifice_damage_this_turn += 3;
+    if (HasActiveCard(player, CardType_Barrier)) { return; }
 
-    if (HasActiveCard(enemy, CardType_ForcedSalvation)) { enemy->health += 3; }
-    if (HasActiveCard(player, CardType_BloodPact)) { enemy->health -= 3; }
+    u32 overall_damage = player->attack_modifier * 3;
+
+    player->health -= overall_damage;
+    state->sacrifice_damage_this_turn += overall_damage;
+
+    if (HasActiveCard(enemy, CardType_ForcedSalvation)) { enemy->health += overall_damage; }
+    if (HasActiveCard(player, CardType_BloodPact)) { enemy->health -= overall_damage; }
 }
 
 internal CARD_EFFECT(DevilsWheel) {
@@ -133,12 +141,16 @@ internal CARD_EFFECT(LuckyFeeling) {
     // Mana cost: 2
 
     if (RandomChoice(2) == 0) {
-        player->health -= 3;
+        if (HasActiveCard(player, CardType_Barrier)) { return; }
 
-        state->sacrifice_damage_this_turn += 3;
+        u32 overall_damage = player->attack_modifier * 3;
 
-        if (HasActiveCard(enemy, CardType_ForcedSalvation)) { enemy->health += 3; }
-        if (HasActiveCard(player, CardType_BloodPact)) { enemy->health -= 3; }
+        player->health -= overall_damage;
+
+        state->sacrifice_damage_this_turn += overall_damage;
+
+        if (HasActiveCard(enemy, CardType_ForcedSalvation)) { enemy->health += overall_damage; }
+        if (HasActiveCard(player, CardType_BloodPact)) { enemy->health -= overall_damage; }
     }
     else {
         enemy->health -= 3;
@@ -169,7 +181,7 @@ internal CARD_EFFECT(PlayingDumb) {
     // Deal damage equal to the number of cards in your hand multipled by 2
     // Mana cost: 2
 
-    u32 damage = player->card_count * 2;
+    u32 damage = player->attack_modifier * player->card_count * 2;
     enemy->health -= damage;
     state->damage_this_turn += damage;
 }
@@ -203,7 +215,7 @@ internal CARD_EFFECT(TimeBomb) {
     // Deals damage equal to all damage done last turn
     // Mana cost: 5
 
-    u32 total_damage = (state->damage_last_turn + state->sacrifice_damage_last_turn);
+    u32 total_damage = player->attack_modifier * (state->damage_last_turn + state->sacrifice_damage_last_turn);
     enemy->health -= total_damage;
 
     state->damage_this_turn += total_damage;
@@ -395,4 +407,123 @@ internal CARD_EFFECT(AlternateReality) {
 
     for (u32 it = 0; it < enemy_card_count; ++it) { RemoveCard(enemy, enemy_middle); }
     for (u32 it = 0; it < player_card_count; ++it) { RemoveCard(player, player_middle); }
+}
+
+/// Enery cards
+
+internal CARD_EFFECT(Barrier) {
+    // You take no damage this turn
+    // Mana cost: 6
+
+    player->active_cards[player->active_card_count++] = CardType_Barrier;
+}
+
+internal CARD_EFFECT(CompleteMeltdown) {
+    // Half your life points, double the damage of your next attack
+
+    player->health = (player->health + 1) / 2; // Generous half
+    player->attack_modifier = 2;
+    player->set_attack_mod = true;
+}
+
+internal CARD_EFFECT(DazzlingLight) {
+    // Your opponent plays random cards from ethier hands until thy run out of mana next turn
+    // Mana cost: 4
+
+    // @Todo: The game doesn't check for this card yet!
+    player->active_cards[player->active_card_count++] = CardType_DazzlingLight;
+}
+
+internal CARD_EFFECT(Emc2) {
+    // Deal damage equal to the mana cost of the last card your opponent used
+    // Mana cost: 2
+
+    if (enemy->graveyard_next == 0) { return; }
+
+    Card *last = &enemy->graveyard[enemy->graveyard_next - 1];
+    u32 damage = player->attack_modifier * last->cost;
+
+    enemy->health -= damage;
+    state->damage_this_turn += damage;
+}
+
+internal CARD_EFFECT(EnergyInefficient) {
+    // Give your opponent 1-mana empty mana crystals's for each mana you have left
+    // Mana cost: 4
+
+    for (u32 it = 0; it < player->mana; ++it) {
+        enemy->cards[enemy->card_count++] = GetCard(state->card_index, CardType_EmptyManaCrystal);
+    }
+}
+
+internal CARD_EFFECT(Malfunction) {
+    // Deal damage equal to your opponents mana
+    // Mana cost: 3
+
+    u32 overall_damage = player->attack_modifier * enemy->mana;
+
+    enemy->health -= overall_damage;
+    state->damage_this_turn += overall_damage;
+}
+
+internal CARD_EFFECT(ManaErosion) {
+    // Your opponent has 2 less mana next turn
+    // Mana cost: 3
+
+    enemy->temp_mana_change -= 2;
+}
+
+internal CARD_EFFECT(ManaStarved) {
+    // Your opponent has no mana next turn
+    // Mana cost: 7
+
+    enemy->temp_mana_change = (enemy->max_mana >= 10) ? -enemy->max_mana : -(enemy->max_mana + 1);
+}
+
+internal CARD_EFFECT(MiracleMachine) {
+    // Convert your remaining mana into health
+    // Mana cost: 2
+
+    player->health += (player->mana);
+    player->mana = 0;
+}
+
+internal CARD_EFFECT(NotPlayingAlong) {
+    // Your opponent loses one mana next turn for every card in their hand
+    // Mana cost: 4
+
+    s32 mana_loss = enemy->card_count;
+    enemy->temp_mana_change -= mana_loss;
+}
+
+internal CARD_EFFECT(Overdrive) {
+    // Double your mana for this turn. Half it for your next
+    // Mana cost: 4
+
+    player->mana = 2 * player->mana;
+    player->active_cards[player->active_card_count++] = CardType_Overdrive;
+}
+
+internal CARD_EFFECT(OverflowingEnergy) {
+    // Add 5 to your total mana cap
+    // Mana cost: 13
+
+    player->max_mana += 5;
+}
+
+internal CARD_EFFECT(PowerSurge) {
+    // Give your opponent 2 mana next turn and take 5 away for the turn after
+    // Mana cost: 3
+
+    // @Todo: This will have to be figured out.. How to take 5 away for the turn after
+    // Will probably have to be something with the active cards
+
+    enemy->temp_mana_change += 2;
+}
+
+internal CARD_EFFECT(FootingTheBill) {
+    // Your opponent has 1 less mana next turn for every card you play this turn
+
+    player->active_cards[player->active_card_count++] = CardType_FootingTheBill;
+    enemy->temp_mana_change--;
 }

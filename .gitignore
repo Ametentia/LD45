@@ -4,7 +4,9 @@ build/
 *.include
 
 LD45/
+Empty Handed/
 .vscode/
+data/backgrounds
 
 # Prerequisites
 *.d

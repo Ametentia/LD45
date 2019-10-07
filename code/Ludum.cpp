@@ -8,6 +8,7 @@ internal void InitialiseCardIndex(Card_Index *index, Asset_Manager *assets) {
         #include "Generated_Texture_Names.include"
     };
 
+    u32 count = ArrayCount(card_names);
     Assert(ArrayCount(card_names) == CardType_Count);
 
     for (u32 it = 0; it < CardType_Count; ++it) {
@@ -27,22 +28,37 @@ internal void InitialiseCardIndex(Card_Index *index, Asset_Manager *assets) {
             case CardType_AlternateReality: { card->Execute = AlternateReality; card->cost = 3; } break;
             case CardType_Altruism: { card->Execute = Altruism; card->cost = 6; } break;
             case CardType_BallAndChain: { card->Execute = 0; card->cost = 6; } break;
+            case CardType_Barrier: { card->Execute = Barrier; card->cost = 6; } break;
             case CardType_BestIntentions: { card->Execute = BestIntentions; card->cost = 3; } break;
             case CardType_BlackHole: { card->Execute = BlackHole; card->cost = 8; } break;
             case CardType_BloodPact: { card->Execute = BloodPact; card->cost = 2; } break;
             case CardType_BoundByTime: { card->Execute = BoundByTime; card->cost = 4; } break;
             case CardType_Charity: { card->Execute = Charity; card->cost = 3; } break;
+            case CardType_CompleteMeltdown: { card->Execute = CompleteMeltdown; card->cost = 4; } break;
             case CardType_DarkRitual: { card->Execute = DarkRitual; card->cost = 5; } break;
             case CardType_DarknessOfSpace: { card->Execute = DarknessOfSpace; card->cost = 2; } break;
+            case CardType_DazzlingLight: { card->Execute = DazzlingLight; card->cost = 4; } break;
             case CardType_DevilsWheel: { card->Execute = DevilsWheel; card->cost = 3; } break;
+            case CardType_Emc2: { card->Execute = Emc2; card->cost = 2; } break;
+            case CardType_EmptyManaCrystal: { card->Execute = 0; card->cost = 1; } break;
+            case CardType_EnergyInefficient: { card->Execute = EnergyInefficient; card->cost = 4; } break;
             case CardType_EventHorizon: { card->Execute = EventHorizon; card->cost = 6; } break;
+            case CardType_FootingTheBill: { card->Execute = FootingTheBill; card->cost = 1; } break;
             case CardType_ForcedSalvation: { card->Execute = ForcedSalvation; card->cost = 2; } break;
             case CardType_GravitationalPull: { card->Execute = GravitationalPull; card->cost = 3; } break;
             case CardType_LuckyFeeling: { card->Execute = LuckyFeeling; card->cost = 2; } break;
+            case CardType_Malfunction: { card->Execute = Malfunction; card->cost = 3; } break;
+            case CardType_ManaErosion: { card->Execute = ManaErosion; card->cost = 3; } break;
+            case CardType_ManaStarved: { card->Execute = ManaStarved; card->cost = 7; } break;
+            case CardType_MiracleMachine: { card->Execute = MiracleMachine; card->cost = 0; } break;
             case CardType_NostalgiaTrip: { card->Execute = NostalgiaTrip; card->cost = 2; } break;
+            case CardType_NotPlayingAlong: { card->Execute = NotPlayingAlong; card->cost = 4; } break;
+            case CardType_Overdrive: { card->Execute = Overdrive; card->cost = 4; } break;
+            case CardType_OverflowingEnergy: { card->Execute = OverflowingEnergy; card->cost = 13; } break;
             case CardType_OwnInterests: { card->Execute = OwnInterests; card->cost = 8; } break;
             case CardType_Pebbles: { card->Execute = 0; card->cost = 1; } break;
             case CardType_PlayingDumb: { card->Execute = PlayingDumb; card->cost = 2; } break;
+            case CardType_PowerSurge: { card->Execute = PowerSurge; card->cost = 3; } break;
             case CardType_Premonition: { card->Execute = Premonition; card->cost = 2; } break;
             case CardType_PureAnarchy: { card->Execute = PureAnarchy; card->cost = 4; } break;
             case CardType_Recursion: { card->Execute = Recursion; card->cost = 1; } break;
@@ -63,6 +79,23 @@ internal void InitialiseCardIndex(Card_Index *index, Asset_Manager *assets) {
     printf("There are %d cards\n", CardType_Count);
 }
 
+internal void GetDeck(Board_State *board, Card *place, u32 deck_index) {
+    const Card_Type *deck_type = 0;
+    u32 count = 0;
+    switch (deck_index) {
+        case 0: { deck_type = energy_deck; count = ArrayCount(energy_deck); } break;
+        case 1: { deck_type = time_and_space_deck; count = ArrayCount(time_and_space_deck); } break;
+        case 2: { deck_type = chaos_deck; count = ArrayCount(chaos_deck); } break;
+        default: { Assert(false); } break;
+    }
+
+    for (u32 it = 0; it < count; ++it) {
+        place[it] = GetCard(board->card_index, deck_type[it]);
+    }
+
+    ShuffleCards(place, count);
+}
+
 internal void UseCard(Board_State *state, Player *player, Player *enemy, u32 index) {
     Card card = player->cards[index];
 
@@ -73,7 +106,17 @@ internal void UseCard(Board_State *state, Player *player, Player *enemy, u32 ind
         RemoveCard(player, index);
         if (card.Execute) { card.Execute(state, player, enemy); }
 
+        if (player->set_attack_mod) { player->set_attack_mod = false; }
+        else { player->attack_modifier = 1; }
+
+        if (HasActiveCard(player, CardType_FootingTheBill)) { enemy->temp_mana_change--; }
+
         player->turn_used_count++;
+
+        player->has_card = true;
+        player->used_card_display_time = 2;
+        player->used_card_display_y_offset = -10;
+        player->used_card_image = card.image;
     }
 }
 
@@ -124,7 +167,8 @@ internal void ExecuteDrawPhase(Game_State *state, Board_State *board, Game_Input
     Player *player = &state->players[current_player];
 
     if (player->max_mana < 10) { player->max_mana++; }
-    player->mana = player->max_mana;
+    player->mana = player->max_mana + player->temp_mana_change;
+    if (player->mana < 0) { player->mana = 0; }
 
     // Draw a card if the player has less than 5 in their hand
     if (player->card_count < 5) {
@@ -142,10 +186,15 @@ internal void ExecuteDrawPhase(Game_State *state, Board_State *board, Game_Input
     s32 recursion_index = -1;
     for (u32 it = 0; it < player->active_card_count; ++it) {
         if (player->active_cards[it] == CardType_Recursion) { recursion_index = it; }
+        if (player->active_cards[it] == CardType_Overdrive) {
+            player->mana = (player->mana + 1) / 2; // Generous divide
+        }
 
         // Don't really care what this is as it will be overwritten anyway
         player->active_cards[it] = cast(Card_Type) 0;
     }
+
+    if (player->type == PlayerType_Computer) { player->card_use_time = 0; }
 
     player->active_card_count = 0;
 
@@ -166,8 +215,10 @@ internal void ExecutePlayPhase(Game_State *state, Board_State *board, Game_Input
     Player *player = &state->players[0];
     Player *enemy  = &state->players[1];
 
+    Player *turn  = &state->players[board->current_player_turn];
+    Player *other = &state->players[1 - board->current_player_turn];
+
     char buf[256];
-    snprintf(buf, sizeof(buf), "Enemy Health: %d\n", enemy->health);
 
     sfFont *font = GetFont(&state->assets, state->system_font);
 
@@ -175,21 +226,65 @@ internal void ExecutePlayPhase(Game_State *state, Board_State *board, Game_Input
     sfText_setCharacterSize(health_text, 50);
     sfText_setFont(health_text, font);
     sfText_setString(health_text, buf);
-    sfRenderWindow_drawText(global_window, health_text, 0);
 
     snprintf(buf, sizeof(buf), "Player Health: %d\n", player->health);
     sfText_setString(health_text, buf);
     sfText_setPosition(health_text, V2(0, global_view_size.y - 60));
     sfRenderWindow_drawText(global_window, health_text, 0);
 
-    snprintf(buf, sizeof(buf), "Player Mana: %d/%d\n", player->mana, player->max_mana);
+    snprintf(buf, sizeof(buf), "Enemy Health: %d\n", enemy->health);
+
+    sfFloatRect text_size = sfText_getLocalBounds(health_text);
     sfText_setString(health_text, buf);
-    sfText_setPosition(health_text, V2(0, global_view_size.y - 120));
+    sfText_setPosition(health_text, V2(global_view_size.x - text_size.width - 20, 0));
     sfRenderWindow_drawText(global_window, health_text, 0);
 
     sfText_destroy(health_text);
 
+    if (player->health < 0 || enemy->health < 0) { state->in_menu = true; }
+
     // @Todo: Turns
+
+    // Player mana crystals
+    sfTexture *mana_tex = GetImage(&state->assets, state->mana_image);
+    sfVector2u _mana_tex_size = sfTexture_getSize(mana_tex);
+    v2 mana_tex_size = 0.15 * V2(_mana_tex_size.x, _mana_tex_size.y);
+    v2 mana_begin = V2(global_view_size.x - mana_tex_size.x, global_view_size.y - mana_tex_size.y);
+
+    v2 mana_offset = V2(mana_tex_size.x - 40, 0);
+
+    sfRectangleShape *mana_shape = sfRectangleShape_create();
+    sfRectangleShape_setTexture(mana_shape, mana_tex, true);
+    sfRectangleShape_setSize(mana_shape, mana_tex_size);
+    v2 cur_pos = mana_begin;
+    for (u32 it = 0; it < player->max_mana; ++it) {
+        if (it >= player->mana) { sfRectangleShape_setFillColor(mana_shape, sfBlack); }
+        else { sfRectangleShape_setFillColor(mana_shape, sfWhite); }
+
+        sfRectangleShape_setPosition(mana_shape, cur_pos);
+        sfRenderWindow_drawRectangleShape(global_window, mana_shape, 0);
+
+        cur_pos -= mana_offset;
+    }
+
+    // Enemy Mana cystals
+    mana_begin = V2(5, 5);
+
+    mana_offset = V2(mana_tex_size.x - 40, 0);
+    sfRectangleShape_setTexture(mana_shape, mana_tex, true);
+    sfRectangleShape_setSize(mana_shape, mana_tex_size);
+
+    cur_pos = mana_begin;
+    for (u32 it = 0; it < enemy->max_mana; ++it) {
+        if (it > enemy->mana) { sfRectangleShape_setFillColor(mana_shape, sfBlack); }
+        else { sfRectangleShape_setFillColor(mana_shape, sfWhite); }
+        sfRectangleShape_setPosition(mana_shape, cur_pos);
+        sfRenderWindow_drawRectangleShape(global_window, mana_shape, 0);
+
+        cur_pos += mana_offset;
+    }
+
+    sfRectangleShape_destroy(mana_shape);
 
     // Size of a standard card
     sfVector2u image_size = sfTexture_getSize(GetImage(&state->assets, state->card_index.cards[0].image));
@@ -247,7 +342,6 @@ internal void ExecutePlayPhase(Game_State *state, Board_State *board, Game_Input
         sfRectangleShape_setOrigin(card_shape, 0.5f * size);
         sfRectangleShape_setRotation(card_shape, 180);
         sfRectangleShape_setFillColor(card_shape, (card->effect_flags & CardStatus_Frozen) ? sfCyan : sfWhite);
-        sfRectangleShape_setTexture(card_shape, GetImage(&state->assets, card->image), true);
 
         sfRectangleShape_setOrigin(card_shape, V2(0.5f * size.x, 0));
         // @Hack: Translated it along the directional axes by the height to place in the right position once
@@ -294,19 +388,82 @@ internal void ExecutePlayPhase(Game_State *state, Board_State *board, Game_Input
         sfRectangleShape_setRotation(card_shape, Degrees(tx->angle));
 
         sfRenderWindow_drawRectangleShape(global_window, card_shape, 0);
-
     }
 
-    if (state->players[board->current_player_turn].type == PlayerType_Computer) {
-        // @Todo: AI goes here
-        while ((enemy->card_count > 0) && enemy->mana >= enemy->cards[0].cost) {
-            UseCard(board, enemy, player, 0);
+    if (player->has_card) {
+        player->used_card_display_time -= input->delta_time;
+        player->used_card_display_y_offset -= (100 * input->delta_time);
 
-            if (enemy->cards[0].effect_flags & CardStatus_Frozen) { break; }
+        f32 offset = player->used_card_display_y_offset;
+
+        sfColor fade_out = { 255, 255, 255, 0 };
+        fade_out.a = cast(u8) (255 * (player->used_card_display_time / 2));
+
+        sfRectangleShape_setFillColor(card_shape, fade_out);
+        sfRectangleShape_setPosition(card_shape, V2(50 + (0.5f * size.x), global_view_size.y - 150 + offset));
+        sfRectangleShape_setTexture(card_shape, GetImage(&state->assets, player->used_card_image), true);
+        sfRectangleShape_setRotation(card_shape, 0);
+
+        sfRenderWindow_drawRectangleShape(global_window, card_shape, 0);
+
+        if (player->used_card_display_time < 0) { player->has_card = false; }
+    }
+
+    if (enemy->has_card) {
+        enemy->used_card_display_time -= input->delta_time;
+        enemy->used_card_display_y_offset -= (100 * input->delta_time);
+
+        f32 offset = enemy->used_card_display_y_offset;
+
+        sfColor fade_out = { 255, 255, 255, 0 };
+        fade_out.a = cast(u8) (255 * (enemy->used_card_display_time / 2));
+
+        sfRectangleShape_setFillColor(card_shape, fade_out);
+        sfRectangleShape_setPosition(card_shape,
+                V2(global_view_size.x - 50 - (0.5f * size.x), (0.5f * size.y) + 150 - offset));
+        sfRectangleShape_setTexture(card_shape, GetImage(&state->assets, enemy->used_card_image), true);
+        sfRectangleShape_setRotation(card_shape, 0);
+
+        sfRenderWindow_drawRectangleShape(global_window, card_shape, 0);
+
+        if (enemy->used_card_display_time < 0) { enemy->has_card = false; }
+    }
+
+    sfRectangleShape_setFillColor(card_shape, sfWhite);
+
+    if (turn->type == PlayerType_Computer) {
+        // @Todo: AI goes here
+        if (enemy->card_count > 0) {
+            if (turn->card_use_time > 2) {
+                turn->card_use_time = 0;
+
+                u32 index = RandomChoice(enemy->card_count);
+                if (enemy->cards[index].cost > enemy->mana && !enemy->has_card) { board->phase = TurnPhase_End; }
+                else { UseCard(board, enemy, player, index); }
+            }
+
+            enemy->card_use_time += input->delta_time;
+        }
+        else if (!enemy->has_card) { board->phase = TurnPhase_End; }
+
+        return;
+    }
+
+    if (HasActiveCard(enemy, CardType_DazzlingLight)) {
+        if (player->card_count == 0) { board->phase = TurnPhase_End; }
+
+        if (player->card_use_time > 2) {
+            u32 index = RandomChoice(player->card_count);
+            if (player->mana < player->cards[index].cost) {
+                board->phase = TurnPhase_End;
+            }
+
+            UseCard(board, player, enemy, index);
+
+            player->card_use_time = 0;
         }
 
-        board->phase = TurnPhase_End;
-        return;
+        player->card_use_time += input->delta_time;
     }
 
     // @Todo: Make this more robust
@@ -392,10 +549,28 @@ internal void ExecutePlayPhase(Game_State *state, Board_State *board, Game_Input
             sfRenderWindow_drawRectangleShape(global_window, card_shape, 0);
         }
 
+        v2 confirm_pos = V2(global_view_size.x * 0.5f - state->confim_button_size.x * 0.5f,
+                global_view_size.y * 0.5f);
+        v2 offset_mouse = input->mouse_position - confirm_pos;
+
+        sfRectangleShape *confirm = sfRectangleShape_create();
+        sfRectangleShape_setPosition(confirm, confirm_pos);
+        sfRectangleShape_setSize(confirm, state->confim_button_size);
+        sfRectangleShape_setTexture(confirm, GetImage(&state->assets, state->confirm_image), true);
+
+        sfRenderWindow_drawRectangleShape(global_window, confirm, 0);
+
+        bool confirmed = false;
+        if (offset_mouse.x >= 0 && offset_mouse.x < (0.5f * state->confim_button_size.x) &&
+                offset_mouse.y >= 0 && offset_mouse.y < (0.5f * state->confim_button_size.y))
+        {
+            confirmed = true;
+        }
+
         if (card_count == 0) {
             player->state_flags &= ~PlayerState_ViewingCards;
         }
-        else if (JustPressed(keyboard->confirm) && selecting) {
+        else if ((JustPressed(keyboard->confirm) || confirmed) && selecting) {
             for (u32 it = 0; it < card_count;) {
                 // A selected card has been found
                 if (card_pool[it].effect_flags & CardStatus_Selected) {
@@ -413,10 +588,13 @@ internal void ExecutePlayPhase(Game_State *state, Board_State *board, Game_Input
             player->select_card_count = 0;
             player->state_flags &= ~PlayerState_ViewingCards;
         }
-        else if (JustPressed(keyboard->menu) || JustPressed(keyboard->confirm)) {
+        else if (JustPressed(keyboard->menu) || JustPressed(keyboard->confirm) || confirmed) {
             player->state_flags &= ~PlayerState_ViewingCards;
         }
 
+
+
+        sfRectangleShape_destroy(confirm);
         sfRectangleShape_destroy(card_shape);
         sfRectangleShape_destroy(shadow);
         return;
@@ -429,6 +607,15 @@ internal void ExecutePlayPhase(Game_State *state, Board_State *board, Game_Input
         f32 begin_y = (global_view_size.y / 5) + (0.5f * size.y);
         v2 begin = V2(begin_x, begin_y);
         v2 offset = V2(size.x + padding, 0);
+
+        sfRectangleShape *overlay = sfRectangleShape_create();
+        sfColor colour = { 0, 0, 0, 85 };
+        sfRectangleShape_setSize(overlay, global_view_size);
+        sfRectangleShape_setFillColor(overlay, colour);
+
+        sfRenderWindow_drawRectangleShape(global_window, overlay, 0);
+
+        sfRectangleShape_destroy(overlay);
 
         bool hit = false;
         v2 bbox_position = begin - V2(0.5f * size.x, size.y);
@@ -550,6 +737,15 @@ internal void ExecutePlayPhase(Game_State *state, Board_State *board, Game_Input
         return;
     }
 
+    v2 mouse = input->mouse_position - state->end_turn_pos;
+    if (mouse.x >= 0 && mouse.x < (0.5f * state->end_turn_size.x) && mouse.y >= 0 &&
+            mouse.y < (0.5f * state->end_turn_size.y))
+         {
+             if (JustPressed(input->mouse_buttons[0])) {
+                 board->phase = TurnPhase_End;
+             }
+         }
+
     // Show the card that is being hovered
     if (!state->dragging && hover_index != -1) {
         Card *card = &player->cards[hover_index];
@@ -560,6 +756,7 @@ internal void ExecutePlayPhase(Game_State *state, Board_State *board, Game_Input
             state->dragging_index = hover_index;
         }
         else {
+            sfRectangleShape_setFillColor(card_shape, sfWhite);
             sfRectangleShape_setOrigin(card_shape, 0.5f * size);
             sfRectangleShape_setSize(card_shape, 2 * size);
 
@@ -637,6 +834,12 @@ internal void ExecuteEndPhase(Game_State *state, Board_State *board, Game_Input 
 
     Player *this_turn = &state->players[just_went];
 
+    if (this_turn->card_count == 0) {
+        this_turn->cleared_out = true;
+        this_turn->health += 2;
+        if (this_turn->max_mana < 10) { this_turn->max_mana++; }
+    }
+
     this_turn->last_turn_health = this_turn->health;
     this_turn->last_turn_used_count = this_turn->turn_used_count;
     this_turn->turn_used_count = 0;
@@ -646,6 +849,8 @@ internal void ExecuteEndPhase(Game_State *state, Board_State *board, Game_Input 
 
     board->damage_this_turn = 0;
     board->sacrifice_damage_this_turn = 0;
+
+    this_turn->temp_mana_change = 0;
 
     for (u32 it = 0; it < this_turn->card_count; ++it) {
         Card *card = &this_turn->cards[it];
@@ -675,7 +880,13 @@ internal void LudumUpdateRender(Game_State *state, Game_Input *input) {
     if (!state->initialised) {
         InitialiseCardIndex(&state->card_index, &state->assets);
 
+        // @Todo: Maybe this should just be stored directly in the Board_State dunno if we'll need it
+        // elsewhere
+        state->board.card_index = &state->card_index;
+        state->board.phase = TurnPhase_Draw;
+
         Music_Handle music_handle = LoadMusic(&state->assets, "data/music.wav");
+        Assert(IsValid(music_handle));
         sfMusic *music = GetMusic(&state->assets, music_handle);
 
         sfMusic_setLoop(music, true);
@@ -684,6 +895,18 @@ internal void LudumUpdateRender(Game_State *state, Game_Input *input) {
 
         state->system_font = LoadFont(&state->assets, "data/ubuntu.ttf");
 
+        state->inverted_start_image = LoadImage(&state->assets, "data/invert_start.png");
+        state->start_image = LoadImage(&state->assets, "data/start.png");
+        state->menu_image = LoadImage(&state->assets, "data/menu.png");
+        state->confirm_image = LoadImage(&state->assets, "data/confirm.png");
+        sfTexture *texture = GetImage(&state->assets, state->confirm_image);
+
+        sfVector2u _conf = sfTexture_getSize(texture);
+        state->confim_button_size = 0.5f * V2(_conf.x, _conf.y);
+
+        state->mana_image = LoadImage(&state->assets, "data/mana_crystal2.png");
+        state->end_turn_image = LoadImage(&state->assets, "data/end_turn.png");
+
         state->glow_image = LoadImage(&state->assets, "data/glow2.png");
         state->shadow_image = LoadImage(&state->assets, "data/shadow.png");
         state->board_image = LoadImage(&state->assets, "data/board.png");
@@ -691,67 +914,94 @@ internal void LudumUpdateRender(Game_State *state, Game_Input *input) {
 
         Player *player = &state->players[0];
         player->type = PlayerType_Human;
-        player->deck[0] = GetCard(&state->card_index, CardType_BlackHole);
-        for (u32 it = 1; it < ArrayCount(player->deck); ++it) {
-            Card_Type type;
-            do {
-                type = cast(Card_Type) RandomChoice(CardType_Count);
-            }
-            while (type == CardType_Back);
 
-            player->deck[it] = GetCard(&state->card_index, type);
-        }
+        GetDeck(&state->board, player->deck, 0);
+        player->deck[0] = GetCard(state->board.card_index, CardType_Charity);
 
+        player->attack_modifier = 1;
         player->health = 20;
         player->max_mana = 0;
 
         Player *enemy = &state->players[1];
+        enemy->attack_modifier = 1;
         enemy->health = 20;
         enemy->type = PlayerType_Computer;
-        enemy->deck[0] = GetCard(&state->card_index, CardType_OwnInterests);
-        for (u32 it = 1; it < ArrayCount(enemy->deck); ++it) {
-            Card_Type type;
-            do {
-                type = cast(Card_Type) RandomChoice(CardType_Count);
-            }
-            while (type == CardType_Back);
+        GetDeck(&state->board, enemy->deck, 1);
 
-//            Card_Type c_type = (it & 1) ? CardType_PlayingDumb : CardType_Sacrifice;
-            enemy->deck[it] = GetCard(&state->card_index, type);
-        }
-
-
-        // @Todo: Maybe this should just be stored directly in the Board_State dunno if we'll need it
-        // elsewhere
-        state->board.card_index = &state->card_index;
-        state->board.phase = TurnPhase_Draw;
+        state->in_menu = true;
 
         state->initialised = true;
     }
 
-    // Draw the board
-    // @Note: This happens regardless of phase or turn so might as well do it right away
-    sfRectangleShape *board_shape = sfRectangleShape_create();
-    sfRectangleShape_setPosition(board_shape, V2(0, 0));
-    sfRectangleShape_setSize(board_shape, global_view_size);
-    sfRectangleShape_setTexture(board_shape, GetImage(&state->assets, state->board_image), true);
-    sfRenderWindow_drawRectangleShape(global_window, board_shape, 0);
+    if (state->in_menu) {
+        sfRectangleShape *shape = sfRectangleShape_create();
+        sfRectangleShape_setSize(shape, global_view_size);
+        sfRectangleShape_setTexture(shape, GetImage(&state->assets, state->menu_image), true);
 
-    sfRectangleShape_destroy(board_shape);
+        sfRenderWindow_drawRectangleShape(global_window, shape, 0);
 
-    Board_State *board = &state->board;
-    switch (board->phase) {
-        case TurnPhase_Draw: {
-            ExecuteDrawPhase(state, board, input);
+        v2 start_button_pos = V2(global_view_size.x - state->confim_button_size.x - 80, 230);
+        sfRectangleShape_setPosition(shape, start_button_pos);
+        sfRectangleShape_setSize(shape, state->confim_button_size);
+        sfRectangleShape_setTexture(shape, GetImage(&state->assets, state->start_image), true);
+
+        bool hit = false;
+        v2 offset_mouse = input->mouse_position - start_button_pos;
+        if (offset_mouse.x >= 0 && offset_mouse.x < (0.5f * state->confim_button_size.x) &&
+                offset_mouse.y >= 0 && offset_mouse.y < (0.5f * state->confim_button_size.y))
+        {
+            sfRectangleShape_setTexture(shape, GetImage(&state->assets, state->inverted_start_image), true);
+            hit = JustPressed(input->mouse_buttons[0]);
         }
-        break;
-        case TurnPhase_Play: {
-            ExecutePlayPhase(state, board, input);
+
+        sfRenderWindow_drawRectangleShape(global_window, shape, 0);
+
+        if (JustPressed(input->keyboard.confirm) || hit) {
+            state->in_menu = false;
         }
-        break;
-        case TurnPhase_End: {
-            ExecuteEndPhase(state, board, input);
+
+        sfRectangleShape_destroy(shape);
+    }
+    else {
+        // Draw the board
+        // @Note: This happens regardless of phase or turn so might as well do it right away
+        sfRectangleShape *board_shape = sfRectangleShape_create();
+        sfRectangleShape_setPosition(board_shape, V2(0, 0));
+        sfRectangleShape_setSize(board_shape, global_view_size);
+        sfRectangleShape_setTexture(board_shape, GetImage(&state->assets, state->board_image), true);
+        sfRenderWindow_drawRectangleShape(global_window, board_shape, 0);
+
+        sfTexture *end_turn = GetImage(&state->assets, state->end_turn_image);
+
+        sfVector2u _tex_size = sfTexture_getSize(end_turn);
+        v2 tex_size = V2(_tex_size.x, _tex_size.y);
+
+        sfRectangleShape_setPosition(board_shape, V2(global_view_size.x - (0.5F * tex_size.x) - 10,
+                    (global_view_size.y * 0.5f) - (0.25f * tex_size.y)));
+        sfRectangleShape_setSize(board_shape, 0.5f * tex_size);
+        sfRectangleShape_setTexture(board_shape, end_turn, true);
+
+        sfRenderWindow_drawRectangleShape(global_window, board_shape, 0);
+
+        state->end_turn_pos = sfRectangleShape_getPosition(board_shape);
+        state->end_turn_size = tex_size;
+
+        sfRectangleShape_destroy(board_shape);
+
+        Board_State *board = &state->board;
+        switch (board->phase) {
+            case TurnPhase_Draw: {
+                ExecuteDrawPhase(state, board, input);
+            }
+            break;
+            case TurnPhase_Play: {
+                ExecutePlayPhase(state, board, input);
+            }
+            break;
+            case TurnPhase_End: {
+                ExecuteEndPhase(state, board, input);
+            }
+            break;
         }
-        break;
     }
 }

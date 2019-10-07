@@ -11,9 +11,9 @@ pushd "../build" > /dev/null
 echo "    \"data/cards/back.png\"," > "../code/Generated_Texture_Names.include"
 /bin/find ../data/cards -name "*.png" -printf "    \"data/cards/%P\",\n" | grep -v "back.png" | sort >> "../code/Generated_Texture_Names.include"
 
-COMMON_CXX_FLAGS="-O0 -g -ggdb -Wno-writable-strings -DLUDUM_WINDOWS=0"
+COMMON_CXX_FLAGS="-O0 -g -ggdb -Wno-writable-strings -DLUDUM_WINDOWS=1"
 INCLUDE="-isystem ../libs/CSFML/include"
-LIBS="-L../libs/CSFML/lib -lcsfml-audio-d -lcsfml-graphics-d -lcsfml-window-d -lcsfml-system-d"
+LIBS="-L../libs/CSFML/lib -lcsfml-audio -lcsfml-graphics -lcsfml-window -lcsfml-system"
 
 clang++ $COMMON_CXX_FLAGS $INCLUDE ../code/SFML_Ludum.cpp -o SFML_Ludum.exe $LIBS
 
