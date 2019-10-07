@@ -47,4 +47,8 @@ inline v3 V3(f32 x, f32 y, f32 z) {
 #define Degrees(rad) ((rad) * (180.0f / PI32))
 #define Radians(deg) ((deg) * (PI32 / 180.0f))
 
+#define Min(a, b) ((a) < (b) ? (a) : (b))
+#define Max(a, b) ((a) > (b) ? (a) : (b))
+
+
 #endif  // LUDUM_TYPES_H_

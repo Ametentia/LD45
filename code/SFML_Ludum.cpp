@@ -60,6 +60,7 @@ internal void SFMLGetInput(Game_Input *current, Game_Input *prev) {
     SFMLProcessButton(&current_keyboard->card_slot_4, prev_keyboard->card_slot_4, sfKeyboard_isKeyPressed(sfKeyNum4));
     SFMLProcessButton(&current_keyboard->card_slot_5, prev_keyboard->card_slot_5, sfKeyboard_isKeyPressed(sfKeyNum5));
 
+    SFMLProcessButton(&current_keyboard->confirm, prev_keyboard->confirm, sfKeyboard_isKeyPressed(sfKeyEnter));
     SFMLProcessButton(&current_keyboard->menu, prev_keyboard->menu, sfKeyboard_isKeyPressed(sfKeyEscape));
 }
 
@@ -73,8 +74,10 @@ int main(int argc, char **argv) {
 
     // Create window
     sfVideoMode mode = { 1280, 720, 32 };
+    sfContextSettings settings = {};
+    settings.antialiasingLevel = 8;
     //sfVideoMode mode = { 1920, 1080, 32 };
-    global_window = sfRenderWindow_create(mode, "Ludum Dare 45", sfClose, 0);
+    global_window = sfRenderWindow_create(mode, "Ludum Dare 45", sfClose, &settings);
     if (!global_window) {
         printf("[Fatal Error] Could not create SFML window\n");
         return 1;
@@ -94,6 +97,16 @@ int main(int argc, char **argv) {
 
     Game_State __state = {};
     Game_State *state = &__state;
+
+    state->players = cast(Player *) malloc(sizeof(Player) * 2);
+
+    // Quick clear of the player struct because C won't do that for us
+    {
+        u8 *player_pointer = cast(u8 *) state->players;
+        for (u32 it = 0; it < (sizeof(Player) * 2); ++it) {
+            player_pointer[it] = 0;
+        }
+    }
 
     InitialiseAssetManager(&state->assets, 256);
 

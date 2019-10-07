@@ -8,11 +8,12 @@ fi
 pushd "../build" > /dev/null
 
 # @Hack: To get unix find to work over windows find
-/bin/find ../data/cards -name "*.png" -printf "    \"data/cards/%P\",\n" | sort > "../code/Generated_Texture_Names.include"
+echo "    \"data/cards/back.png\"," > "../code/Generated_Texture_Names.include"
+/bin/find ../data/cards -name "*.png" -printf "    \"data/cards/%P\",\n" | grep -v "back.png" | sort >> "../code/Generated_Texture_Names.include"
 
-COMMON_CXX_FLAGS="-O0 -g -ggdb -Wno-writable-strings -DLUDUM_WINDOWS=1"
+COMMON_CXX_FLAGS="-O0 -g -ggdb -Wno-writable-strings -DLUDUM_WINDOWS=0"
 INCLUDE="-isystem ../libs/CSFML/include"
-LIBS="-L../libs/CSFML/lib -lcsfml-graphics-d -lcsfml-window-d -lcsfml-system-d"
+LIBS="-L../libs/CSFML/lib -lcsfml-audio-d -lcsfml-graphics-d -lcsfml-window-d -lcsfml-system-d"
 
 clang++ $COMMON_CXX_FLAGS $INCLUDE ../code/SFML_Ludum.cpp -o SFML_Ludum.exe $LIBS
 

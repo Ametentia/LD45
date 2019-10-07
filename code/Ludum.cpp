@@ -1,17 +1,5 @@
 #include "Ludum_Assets.cpp"
 #include "Ludum_Sockets.cpp"
-
-internal u32 RandomChoice(u32 choices) {
-    u32 result = (rand() % choices);
-    return result;
-}
-
-
-internal Card GetCard(Card_Index *index, Card_Type type) {
-    Card result = index->cards[type];
-    return result;
-}
-
 #include "Ludum_Card_Effects.cpp"
 
 internal void InitialiseCardIndex(Card_Index *index, Asset_Manager *assets) {
@@ -34,94 +22,715 @@ internal void InitialiseCardIndex(Card_Index *index, Asset_Manager *assets) {
         card->effect_flags = 0;
 
         // @Hack: But its an easy way to initialise all of the cards
-       switch (it) {
+        switch (card->type) {
             case CardType_Back: { card->Execute = 0; card->cost = 0; } break;
+            case CardType_AlternateReality: { card->Execute = AlternateReality; card->cost = 3; } break;
+            case CardType_Altruism: { card->Execute = Altruism; card->cost = 6; } break;
+            case CardType_BallAndChain: { card->Execute = 0; card->cost = 6; } break;
             case CardType_BestIntentions: { card->Execute = BestIntentions; card->cost = 3; } break;
             case CardType_BlackHole: { card->Execute = BlackHole; card->cost = 8; } break;
             case CardType_BloodPact: { card->Execute = BloodPact; card->cost = 2; } break;
             case CardType_BoundByTime: { card->Execute = BoundByTime; card->cost = 4; } break;
-            case CardType_Charity: { card->Execute = Charity; card->cost = 6; } break;
+            case CardType_Charity: { card->Execute = Charity; card->cost = 3; } break;
             case CardType_DarkRitual: { card->Execute = DarkRitual; card->cost = 5; } break;
             case CardType_DarknessOfSpace: { card->Execute = DarknessOfSpace; card->cost = 2; } break;
             case CardType_DevilsWheel: { card->Execute = DevilsWheel; card->cost = 3; } break;
+            case CardType_EventHorizon: { card->Execute = EventHorizon; card->cost = 6; } break;
+            case CardType_ForcedSalvation: { card->Execute = ForcedSalvation; card->cost = 2; } break;
             case CardType_GravitationalPull: { card->Execute = GravitationalPull; card->cost = 3; } break;
             case CardType_LuckyFeeling: { card->Execute = LuckyFeeling; card->cost = 2; } break;
             case CardType_NostalgiaTrip: { card->Execute = NostalgiaTrip; card->cost = 2; } break;
             case CardType_OwnInterests: { card->Execute = OwnInterests; card->cost = 8; } break;
+            case CardType_Pebbles: { card->Execute = 0; card->cost = 1; } break;
             case CardType_PlayingDumb: { card->Execute = PlayingDumb; card->cost = 2; } break;
+            case CardType_Premonition: { card->Execute = Premonition; card->cost = 2; } break;
             case CardType_PureAnarchy: { card->Execute = PureAnarchy; card->cost = 4; } break;
+            case CardType_Recursion: { card->Execute = Recursion; card->cost = 1; } break;
             case CardType_Rewind: { card->Execute = Rewind; card->cost = 7; } break;
             case CardType_Sacrifice: { card->Execute = Sacrifice; card->cost = 0; } break;
             case CardType_SapLife: { card->Execute = SapLife; card->cost = 0; } break;
             case CardType_SpaceDebris: { card->Execute = SpaceDebris; card->cost = 2; } break;
             case CardType_TimeBomb: { card->Execute = TimeBomb; card->cost = 5; } break;
+            case CardType_TimeHealsAllWounds: { card->Execute = TimeHealsAllWounds; card->cost = 5; } break;
             case CardType_UnendingTorment: { card->Execute = UnendingTorment; card->cost = 3; } break;
-            case CardType_WormHole: { card->Execute = WormHole; card->cost = 6; } break;
+            case CardType_WormHole: { card->Execute = WormHole; card->cost = 5; } break;
+
+            // Shouldn't activate
+            case CardType_Count: { Assert(false); } break;
         }
+    }
+
+    printf("There are %d cards\n", CardType_Count);
+}
+
+internal void UseCard(Board_State *state, Player *player, Player *enemy, u32 index) {
+    Card card = player->cards[index];
+
+    if (player->mana >= card.cost && !(card.effect_flags & CardStatus_Frozen)) {
+        printf("[Info] Player utilised card with cost %d\n", card.cost);
+
+        player->mana -= card.cost; // @Note: Always happens
+        RemoveCard(player, index);
+        if (card.Execute) { card.Execute(state, player, enemy); }
+
+        player->turn_used_count++;
     }
 }
 
-internal bool UseCard(Board_State *state, Player *player, Player *enemy, Card *card) {
-    // @Note: The condition for card usage may change if the card is frozen or locked or whatever...
-    bool result = false;
-    if (player->mana >= card->cost) {
-        player->mana -= card->cost; // @Note: Always happens
+// @Note: Returns the index of the card that is being hovered over by the mouse. Only valid for the players
+// cards. -1 if no cards are being hovered over
+inline s32 GetCardTransforms(Game_Input *input, v2 base_position, f32 base_angle,
+        v2 size, Card_Transform *transforms, u32 count)
+{
+    s32 result = -1;
+    if (count == 0) { return result; }
 
-        if (card->Execute) { card->Execute(state, player, enemy); }
+    const f32 radius = 250; // How large the inner circle of the fan is
+    f32 min_angle = base_angle + Max(-10.0f * (count - 1), -50);
+    f32 max_angle = base_angle + Min( 10.0f * (count - 1),  50);
 
-        result = true;
+    if (max_angle < min_angle) { Swap(min_angle, max_angle); }
+
+    f32 angle_offset = (max_angle - min_angle) / (count - 1);
+    f32 starting_angle = min_angle;
+    if (count == 1) { angle_offset = 0; }
+
+    for (s32 it = 0; it < count; ++it) {
+        Card_Transform *tx = &transforms[it];
+
+        tx->angle = Radians(starting_angle + (it * angle_offset));
+        tx->axes = V2(Sin(tx->angle), -Cos(tx->angle));
+        tx->offset = radius * tx->axes;
+
+        f32 neg_sin = Sin(-tx->angle);
+        f32 neg_cos = Cos(-tx->angle);
+
+        v2 centre = base_position + tx->offset + ((0.5f * size.y) * tx->axes);
+        v2 mouse = input->mouse_position - centre;
+        v2 rotated_mouse = V2(neg_cos * mouse.x - neg_sin * mouse.y, neg_sin * mouse.x + neg_cos * mouse.y);
+
+        if (Abs(rotated_mouse.x) < (0.5f * size.x) && Abs(rotated_mouse.y) < (0.5f * size.y)) { result = it; }
     }
 
     return result;
 }
 
+//// @Note: Turn Phases are here
+
+// @Phase: Draw Phase
+internal void ExecuteDrawPhase(Game_State *state, Board_State *board, Game_Input *input) {
+    u32 current_player = board->current_player_turn;
+
+    Player *player = &state->players[current_player];
+
+    if (player->max_mana < 10) { player->max_mana++; }
+    player->mana = player->max_mana;
+
+    // Draw a card if the player has less than 5 in their hand
+    if (player->card_count < 5) {
+        Card card = player->deck[player->next_card_index++];
+        card.effect_flags = player->new_card_flags;
+
+        if (card.effect_flags & CardStatus_Frozen) { card.frozen_turn_count = 1; }
+        if (card.effect_flags & CardStatus_Hidden) { card.hidden_turn_count = 1; }
+
+        player->cards[player->card_count++] = card;
+    }
+
+    // @Note: Clear all active cards.
+    // CardType_Recursion is the only persistent active card so it is dealt with in the end phase
+    s32 recursion_index = -1;
+    for (u32 it = 0; it < player->active_card_count; ++it) {
+        if (player->active_cards[it] == CardType_Recursion) { recursion_index = it; }
+
+        // Don't really care what this is as it will be overwritten anyway
+        player->active_cards[it] = cast(Card_Type) 0;
+    }
+
+    player->active_card_count = 0;
+
+    if (recursion_index != -1) { player->active_cards[0] = CardType_Recursion; player->active_card_count++; }
+
+    if (HasActiveCard(player, CardType_Recursion)) {
+        player->mana += 2;
+    }
+
+    // @Note: This will proabably go on for longer for animations and showing you the card you drew etc.
+    board->phase = TurnPhase_Play;
+}
+
+// @Phase: Play Phase
+internal void ExecutePlayPhase(Game_State *state, Board_State *board, Game_Input *input) {
+    Game_Controller *keyboard = &input->keyboard;
+
+    Player *player = &state->players[0];
+    Player *enemy  = &state->players[1];
+
+    char buf[256];
+    snprintf(buf, sizeof(buf), "Enemy Health: %d\n", enemy->health);
+
+    sfFont *font = GetFont(&state->assets, state->system_font);
+
+    sfText *health_text = sfText_create();
+    sfText_setCharacterSize(health_text, 50);
+    sfText_setFont(health_text, font);
+    sfText_setString(health_text, buf);
+    sfRenderWindow_drawText(global_window, health_text, 0);
+
+    snprintf(buf, sizeof(buf), "Player Health: %d\n", player->health);
+    sfText_setString(health_text, buf);
+    sfText_setPosition(health_text, V2(0, global_view_size.y - 60));
+    sfRenderWindow_drawText(global_window, health_text, 0);
+
+    snprintf(buf, sizeof(buf), "Player Mana: %d/%d\n", player->mana, player->max_mana);
+    sfText_setString(health_text, buf);
+    sfText_setPosition(health_text, V2(0, global_view_size.y - 120));
+    sfRenderWindow_drawText(global_window, health_text, 0);
+
+    sfText_destroy(health_text);
+
+    // @Todo: Turns
+
+    // Size of a standard card
+    sfVector2u image_size = sfTexture_getSize(GetImage(&state->assets, state->card_index.cards[0].image));
+    v2 size = V2(0.5f * image_size.x, 0.5f * image_size.y);
+
+    // Positions of the hands on screen
+    f32 hand_y_offset = 200;
+    v2 player_hand_position = V2(0.5f * global_view_size.x, global_view_size.y + hand_y_offset);
+    v2 enemy_hand_position  = V2(0.5f * global_view_size.x, -hand_y_offset);
+
+    // @Debug: Change card counts with keyboard
+    if (JustPressed(keyboard->card_slot_3)) {
+        u32 cc = player->card_count;
+        cc = (cc + 1) % 11;
+        player->card_count = cc;
+    }
+
+    if (JustPressed(keyboard->card_slot_5)) {
+        u32 cc = enemy->card_count;
+        cc = (cc + 1) % 11;
+        enemy->card_count = cc;
+    }
+
+    // Get card transforms for player cards
+    Card_Transform transforms[player->card_count];
+    s32 hover_index = GetCardTransforms(input, player_hand_position, 0, size, transforms, player->card_count);
+
+    // Get card transforms for enemy cards
+    Card_Transform enemy_card_transforms[enemy->card_count];
+    GetCardTransforms(input, enemy_hand_position, 360, size, enemy_card_transforms, enemy->card_count);
+
+    sfRectangleShape *shadow = sfRectangleShape_create();
+    sfRectangleShape *card_shape = sfRectangleShape_create();
+    sfRectangleShape_setSize(card_shape, size);
+    sfRectangleShape_setSize(shadow, size);
+    sfRectangleShape_setTexture(shadow, GetImage(&state->assets, state->shadow_image), true);
+
+    // Render enemy cards
+    sfRectangleShape_setOrigin(shadow, V2(0.5f * size.x, 0));
+    sfRectangleShape_setOrigin(card_shape, V2(0.5f * size.x, 0));
+    sfRectangleShape_setTexture(card_shape, GetImage(&state->assets, GetCard(board->card_index, CardType_Back).image), true);
+    for (s32 it = enemy->card_count - 1; it >= 0; --it) {
+        Card *card = &enemy->cards[it];
+        Card_Transform *tx = &enemy_card_transforms[it];
+
+        v2 card_position = enemy_hand_position - tx->offset;
+        v2 shadow_offset = (8 * tx->axes) + (8 * Perp(tx->axes));
+
+        // Draw drop shadow
+        sfRectangleShape_setRotation(shadow, Degrees(tx->angle));
+        sfRectangleShape_setPosition(shadow, card_position - shadow_offset);
+        sfRenderWindow_drawRectangleShape(global_window, shadow, 0);
+
+        // Draw card back
+        sfRectangleShape_setOrigin(card_shape, 0.5f * size);
+        sfRectangleShape_setRotation(card_shape, 180);
+        sfRectangleShape_setFillColor(card_shape, (card->effect_flags & CardStatus_Frozen) ? sfCyan : sfWhite);
+        sfRectangleShape_setTexture(card_shape, GetImage(&state->assets, card->image), true);
+
+        sfRectangleShape_setOrigin(card_shape, V2(0.5f * size.x, 0));
+        // @Hack: Translated it along the directional axes by the height to place in the right position once
+        // it has been rotated 180 degrees so the card back texture looks the right way from the players point
+        // of view
+        sfRectangleShape_setPosition(card_shape, card_position - (size.y * tx->axes));
+        sfRectangleShape_rotate(card_shape, Degrees(tx->angle));
+
+        sfRenderWindow_drawRectangleShape(global_window, card_shape, 0);
+    }
+
+    // Render player cards
+    sfRectangleShape_setOrigin(shadow, V2(0.5f * size.x, size.y));
+    sfRectangleShape_setOrigin(card_shape, V2(0.5f * size.x, size.y));
+    for (u32 it = 0; it < player->card_count; ++it) {
+        // @Hack: If flags are present remove interaction from the hand
+        if (!(player->state_flags & PlayerState_ViewingCards) && !(player->state_flags & PlayerState_RemovingHand)) {
+            if ((it == hover_index) || (state->dragging && (it == state->dragging_index))) { continue; }
+        }
+
+        Card_Transform *tx = &transforms[it];
+        Card *card = &player->cards[it];
+
+        v2 card_position = player_hand_position + tx->offset;
+        v2 shadow_offset = (8 * tx->axes) + (8 * Perp(tx->axes));
+
+        // Draw drop shadow
+        sfRectangleShape_setRotation(shadow, Degrees(tx->angle));
+        sfRectangleShape_setPosition(shadow, card_position - shadow_offset);
+        sfRenderWindow_drawRectangleShape(global_window, shadow, 0);
+
+        // Draw card face
+        sfTexture *texture = 0;
+        if (card->effect_flags & CardStatus_Hidden) {
+            texture = GetImage(&state->assets, GetCard(board->card_index, CardType_Back).image);
+        }
+        else {
+            texture = GetImage(&state->assets, card->image);
+        }
+
+        sfRectangleShape_setFillColor(card_shape, (card->effect_flags & CardStatus_Frozen) ? sfCyan : sfWhite);
+        sfRectangleShape_setTexture(card_shape, texture, true);
+        sfRectangleShape_setPosition(card_shape, card_position);
+        sfRectangleShape_setRotation(card_shape, Degrees(tx->angle));
+
+        sfRenderWindow_drawRectangleShape(global_window, card_shape, 0);
+
+    }
+
+    if (state->players[board->current_player_turn].type == PlayerType_Computer) {
+        // @Todo: AI goes here
+        while ((enemy->card_count > 0) && enemy->mana >= enemy->cards[0].cost) {
+            UseCard(board, enemy, player, 0);
+
+            if (enemy->cards[0].effect_flags & CardStatus_Frozen) { break; }
+        }
+
+        board->phase = TurnPhase_End;
+        return;
+    }
+
+    // @Todo: Make this more robust
+    if (player->state_flags & PlayerState_ViewingCards) {
+        bool draw_view = (player->state_flags & PlayerState_ViewingDraw);
+        bool hand_view = (player->state_flags & PlayerState_ViewingHand);
+        bool selecting = (player->state_flags & PlayerState_Selecting);
+
+        Card *card_pool = 0;
+
+        u32 card_count = 0;
+        if (draw_view) {
+            card_count = player->select_card_count;
+            card_pool = enemy->deck + enemy->next_card_index;
+        }
+        else if (hand_view) {
+            card_count = enemy->card_count;
+            card_pool = enemy->cards;
+        }
+        else if (selecting) {
+            card_count = player->card_count;
+            card_pool = player->cards;
+        }
+
+        Assert(card_pool);
+
+        if (card_count != 0) {
+            sfRectangleShape *overlay = sfRectangleShape_create();
+            sfColor colour = { 0, 0, 0, 85 };
+            sfRectangleShape_setSize(overlay, global_view_size);
+            sfRectangleShape_setFillColor(overlay, colour);
+
+            sfRenderWindow_drawRectangleShape(global_window, overlay, 0);
+
+            sfRectangleShape_destroy(overlay);
+        }
+
+        f32 padding = 20;
+        v2 centre = 0.5f * global_view_size;
+        f32 width = size.x + ((size.x + padding) * (card_count - 1));
+        f32 begin_x = ((global_view_size.x - width) / 2) + (0.5f * size.x);
+        f32 begin_y = (global_view_size.y / 5) + size.y;
+        v2 begin = V2(begin_x, begin_y);
+        v2 offset = V2(size.x + padding, 0);
+
+        for (u32 it = 0; it < card_count; ++it) {
+            Card *card = &card_pool[it];
+            v2 card_position = begin + (it * offset) - V2(0, 0.5 * size.y);
+
+            // For selecting cards!
+            if (selecting) {
+                v2 offset_mouse = input->mouse_position - card_position;
+                if (Abs(offset_mouse.x) < (0.5f * size.x) && Abs(offset_mouse.y) < (0.5f * size.y)) {
+                    if (JustPressed(input->mouse_buttons[0])) {
+                        bool selected = (card->effect_flags & CardStatus_Selected);
+                        if (selected && player->current_selected_count != 0) {
+                            player->current_selected_count--;
+                            card->effect_flags &= ~CardStatus_Selected;
+                        }
+                        else if (!selected && player->current_selected_count < player->select_card_count) {
+                            player->current_selected_count++;
+                            card->effect_flags |= CardStatus_Selected;
+                        }
+                    }
+                }
+            }
+
+            v2 old_origin = sfRectangleShape_getOrigin(card_shape);
+            sfRectangleShape_setRotation(card_shape, 0);
+            sfRectangleShape_setOrigin(card_shape, 0.5f * size);
+            sfRectangleShape_setPosition(card_shape, card_position);
+            sfRectangleShape_setScale(card_shape, V2(1.05, 1.05));
+            sfRectangleShape_setFillColor(card_shape, (card->effect_flags & CardStatus_Selected) ? sfYellow : sfWhite);
+            sfRectangleShape_setTexture(card_shape, GetImage(&state->assets, state->glow_image), true);
+            sfRenderWindow_drawRectangleShape(global_window, card_shape, 0);
+
+            sfRectangleShape_setFillColor(card_shape, sfWhite);
+            sfRectangleShape_setPosition(card_shape, begin + (it * offset));
+            sfRectangleShape_setOrigin(card_shape, old_origin);
+            sfRectangleShape_setScale(card_shape, V2(1, 1));
+            sfRectangleShape_setTexture(card_shape, GetImage(&state->assets, card->image), true);
+
+            sfRenderWindow_drawRectangleShape(global_window, card_shape, 0);
+        }
+
+        if (card_count == 0) {
+            player->state_flags &= ~PlayerState_ViewingCards;
+        }
+        else if (JustPressed(keyboard->confirm) && selecting) {
+            for (u32 it = 0; it < card_count;) {
+                // A selected card has been found
+                if (card_pool[it].effect_flags & CardStatus_Selected) {
+                    card_pool[it].effect_flags = 0;
+                    enemy->cards[enemy->card_count++] = card_pool[it];
+                    RemoveCard(player, it);
+                    card_count--;
+                }
+                else {
+                    it++;
+                }
+            }
+
+            player->current_selected_count = 0;
+            player->select_card_count = 0;
+            player->state_flags &= ~PlayerState_ViewingCards;
+        }
+        else if (JustPressed(keyboard->menu) || JustPressed(keyboard->confirm)) {
+            player->state_flags &= ~PlayerState_ViewingCards;
+        }
+
+        sfRectangleShape_destroy(card_shape);
+        sfRectangleShape_destroy(shadow);
+        return;
+    }
+    else if (player->state_flags & PlayerState_RemovingHand) {
+        f32 padding = 20;
+        v2 centre = 0.5f * global_view_size;
+        f32 width = size.x + ((size.x + padding) * (enemy->card_count - 1));
+        f32 begin_x = ((global_view_size.x - width) / 2) + (0.5f * size.x);
+        f32 begin_y = (global_view_size.y / 5) + (0.5f * size.y);
+        v2 begin = V2(begin_x, begin_y);
+        v2 offset = V2(size.x + padding, 0);
+
+        bool hit = false;
+        v2 bbox_position = begin - V2(0.5f * size.x, size.y);
+        v2 bbox_size = V2(width, size.y);
+
+        v2 offset_mouse = input->mouse_position - bbox_position;
+        if (offset_mouse.x < bbox_size.x && offset_mouse.x >= 0 &&
+                offset_mouse.y < bbox_size.y && offset_mouse.y >= 0)
+        {
+            hit = true;
+            for (u32 it = 0; it < enemy->card_count; ++it) { enemy->cards[it].effect_flags |= CardStatus_Selected; }
+
+            if (JustPressed(input->mouse_buttons[0])) {
+                for (u32 it = 0; it < enemy->card_count; ++it) {
+                    enemy->graveyard[enemy->graveyard_next++] = enemy->cards[it];
+                }
+
+                enemy->card_count = 0;
+                player->state_flags &= ~PlayerState_RemovingHand;
+            }
+        }
+        else {
+            for (u32 it = 0; it < enemy->card_count; ++it) { enemy->cards[it].effect_flags &= ~CardStatus_Selected; }
+        }
+
+        sfRectangleShape *bbox = sfRectangleShape_create();
+        sfRectangleShape_setPosition(bbox, bbox_position);
+        sfRectangleShape_setSize(bbox, bbox_size);
+        sfRectangleShape_setOutlineThickness(bbox, 10);
+        sfRectangleShape_setOutlineColor(bbox, hit ? sfGreen : sfBlue);
+        sfRectangleShape_setFillColor(bbox, sfTransparent);
+
+        sfRenderWindow_drawRectangleShape(global_window, bbox, 0);
+
+        for (u32 it = 0; it < enemy->card_count; ++it) {
+            Card *card = &enemy->cards[it];
+            v2 card_position = begin + (it * offset) - V2(0, 0.5 * size.y);
+
+            v2 old_origin = sfRectangleShape_getOrigin(card_shape);
+            sfRectangleShape_setRotation(card_shape, 0);
+            sfRectangleShape_setOrigin(card_shape, 0.5f * size);
+            sfRectangleShape_setPosition(card_shape, card_position);
+            sfRectangleShape_setScale(card_shape, V2(1.05, 1.05));
+            sfRectangleShape_setFillColor(card_shape, (card->effect_flags & CardStatus_Selected) ? sfYellow : sfWhite);
+            sfRectangleShape_setTexture(card_shape, GetImage(&state->assets, state->glow_image), true);
+            sfRenderWindow_drawRectangleShape(global_window, card_shape, 0);
+
+            sfRectangleShape_setFillColor(card_shape, sfWhite);
+            sfRectangleShape_setPosition(card_shape, begin + (it * offset));
+            sfRectangleShape_setOrigin(card_shape, old_origin);
+            sfRectangleShape_setScale(card_shape, V2(1, 1));
+            sfRectangleShape_setTexture(card_shape, GetImage(&state->assets, card->image), true);
+
+            sfRenderWindow_drawRectangleShape(global_window, card_shape, 0);
+        }
+
+        width = size.x + ((size.x + padding) * (player->card_count - 1));
+        begin_x = ((global_view_size.x - width) / 2) + (0.5f * size.x);
+        begin_y = (global_view_size.y / 2) + (1.5f * size.y); // @Todo: Figure this out
+        begin = V2(begin_x, begin_y);
+        offset = V2(size.x + padding, 0);
+        sfRectangleShape_setPosition(bbox, begin - V2(0.5f * size.x, size.y));
+        sfRectangleShape_setSize(bbox, V2(width, size.y));
+
+        hit = false;
+        bbox_position = begin - V2(0.5f * size.x, size.y);
+        bbox_size = V2(width, size.y);
+
+        offset_mouse = input->mouse_position - bbox_position;
+        if (offset_mouse.x < bbox_size.x && offset_mouse.x >= 0 &&
+                offset_mouse.y < bbox_size.y && offset_mouse.y >= 0)
+        {
+            hit = true;
+            for (u32 it = 0; it < player->card_count; ++it) { player->cards[it].effect_flags |= CardStatus_Selected; }
+
+            if (JustPressed(input->mouse_buttons[0])) {
+                for (u32 it = 0; it < player->card_count; ++it) {
+                    player->graveyard[player->graveyard_next++] = player->cards[it];
+                }
+
+                player->card_count = 0;
+
+                player->state_flags &= ~PlayerState_RemovingHand;
+            }
+        }
+        else {
+            for (u32 it = 0; it < player->card_count; ++it) { player->cards[it].effect_flags &= ~CardStatus_Selected; }
+        }
+
+        sfRectangleShape_setOutlineColor(bbox, hit ? sfGreen : sfBlue);
+        sfRenderWindow_drawRectangleShape(global_window, bbox, 0);
+
+        sfRectangleShape_destroy(bbox);
+
+        for (u32 it = 0; it < player->card_count; ++it) {
+            Card *card = &player->cards[it];
+            v2 card_position = begin + (it * offset) - V2(0, 0.5 * size.y);
+
+            v2 old_origin = sfRectangleShape_getOrigin(card_shape);
+            sfRectangleShape_setRotation(card_shape, 0);
+            sfRectangleShape_setOrigin(card_shape, 0.5f * size);
+            sfRectangleShape_setPosition(card_shape, card_position);
+            sfRectangleShape_setScale(card_shape, V2(1.05, 1.05));
+            sfRectangleShape_setFillColor(card_shape, (card->effect_flags & CardStatus_Selected) ? sfYellow : sfWhite);
+            sfRectangleShape_setTexture(card_shape, GetImage(&state->assets, state->glow_image), true);
+            sfRenderWindow_drawRectangleShape(global_window, card_shape, 0);
+
+            sfRectangleShape_setFillColor(card_shape, sfWhite);
+            sfRectangleShape_setPosition(card_shape, begin + (it * offset));
+            sfRectangleShape_setOrigin(card_shape, old_origin);
+            sfRectangleShape_setScale(card_shape, V2(1, 1));
+            sfRectangleShape_setTexture(card_shape, GetImage(&state->assets, card->image), true);
+
+            sfRenderWindow_drawRectangleShape(global_window, card_shape, 0);
+        }
+
+        sfRectangleShape_destroy(card_shape);
+        sfRectangleShape_destroy(shadow);
+        return;
+    }
+
+    // Show the card that is being hovered
+    if (!state->dragging && hover_index != -1) {
+        Card *card = &player->cards[hover_index];
+        Card_Transform *tx = &transforms[hover_index];
+
+        if (JustPressed(input->mouse_buttons[0])) {
+            state->dragging = true;
+            state->dragging_index = hover_index;
+        }
+        else {
+            sfRectangleShape_setOrigin(card_shape, 0.5f * size);
+            sfRectangleShape_setSize(card_shape, 2 * size);
+
+            // @Todo: Make this more robust they don't feel like they are quite in the right place!
+            v2 pos = player_hand_position + tx->offset + (0.5f * size.y * tx->axes) + V2(0, 100);
+            sfRectangleShape_setRotation(shadow, 0);
+            sfRectangleShape_setSize(shadow, 2 * size);
+            sfRectangleShape_setPosition(shadow, pos - V2(50, -50));
+            sfRenderWindow_drawRectangleShape(global_window, shadow, 0);
+
+            sfRectangleShape_setOrigin(card_shape, V2(0.5f * size.x, 2 * size.y));
+            sfRectangleShape_setPosition(card_shape, pos);
+            sfRectangleShape_setRotation(card_shape, 0);
+
+            sfTexture *texture = 0;
+            if (card->effect_flags & CardStatus_Hidden) {
+                texture = GetImage(&state->assets, GetCard(board->card_index, CardType_Back).image);
+            }
+            else {
+                texture = GetImage(&state->assets, card->image);
+            }
+
+            sfRectangleShape_setTexture(card_shape, texture, true);
+            sfRenderWindow_drawRectangleShape(global_window, card_shape, 0);
+        }
+    }
+
+    // If the player is dragging around a card
+    if (state->dragging) {
+        Card *card = &player->cards[state->dragging_index];
+
+        sfRectangleShape_setSize(shadow, 2 * size);
+        sfRectangleShape_setOrigin(shadow, size);
+        sfRectangleShape_setRotation(shadow, 0);
+        sfRectangleShape_setPosition(shadow, input->mouse_position - V2(60, -60));
+        sfRenderWindow_drawRectangleShape(global_window, shadow, 0);
+
+        sfRectangleShape_setOrigin(card_shape, size);
+        sfRectangleShape_setRotation(card_shape, 0);
+        sfRectangleShape_setSize(card_shape, 2 * size);
+        sfRectangleShape_setPosition(card_shape, input->mouse_position);
+
+        sfTexture *texture = 0;
+        if (card->effect_flags & CardStatus_Hidden) {
+            texture = GetImage(&state->assets, GetCard(board->card_index, CardType_Back).image);
+        }
+        else {
+            texture = GetImage(&state->assets, card->image);
+        }
+
+        sfRectangleShape_setTexture(card_shape, texture, true);
+        sfRenderWindow_drawRectangleShape(global_window, card_shape, 0);
+
+        if (!IsPressed(input->mouse_buttons[0])) {
+            if (input->mouse_position.y < (0.5f * global_view_size.y)) {
+                UseCard(board, player, enemy, state->dragging_index);
+            }
+
+            state->dragging = false;
+            state->dragging_index = -1;
+        }
+    }
+
+    if (JustPressed(keyboard->confirm)) {
+        board->phase = TurnPhase_End;
+    }
+
+    sfRectangleShape_destroy(shadow);
+    sfRectangleShape_destroy(card_shape);
+}
+
+// @Phase: End Phase
+internal void ExecuteEndPhase(Game_State *state, Board_State *board, Game_Input *input) {
+    u32 just_went = board->current_player_turn;
+
+    Player *this_turn = &state->players[just_went];
+
+    this_turn->last_turn_health = this_turn->health;
+    this_turn->last_turn_used_count = this_turn->turn_used_count;
+    this_turn->turn_used_count = 0;
+
+    board->damage_last_turn = board->damage_this_turn;
+    board->sacrifice_damage_last_turn = board->sacrifice_damage_this_turn;
+
+    board->damage_this_turn = 0;
+    board->sacrifice_damage_this_turn = 0;
+
+    for (u32 it = 0; it < this_turn->card_count; ++it) {
+        Card *card = &this_turn->cards[it];
+
+        if (card->hidden_turn_count != 0) { card->hidden_turn_count--; }
+        if (card->frozen_turn_count != 0) { card->frozen_turn_count--; }
+
+        if (card->hidden_turn_count == 0) { card->effect_flags &= ~CardStatus_Hidden; }
+        if (card->frozen_turn_count == 0) { card->effect_flags &= ~CardStatus_Frozen; }
+    }
+
+    this_turn->new_card_flags = 0;
+
+    if (HasActiveCard(this_turn, CardType_Recursion) && this_turn->mana < 2) {
+        RemoveActiveCard(this_turn, CardType_Recursion);
+    }
+
+    // Advance to the next players turn
+    board->current_player_turn = 1 - just_went;
+
+    board->phase = TurnPhase_Draw;
+}
+
+////
+
 internal void LudumUpdateRender(Game_State *state, Game_Input *input) {
     if (!state->initialised) {
         InitialiseCardIndex(&state->card_index, &state->assets);
 
+        Music_Handle music_handle = LoadMusic(&state->assets, "data/music.wav");
+        sfMusic *music = GetMusic(&state->assets, music_handle);
+
+        sfMusic_setLoop(music, true);
+        sfMusic_setVolume(music, 25);
+        sfMusic_play(music);
+
+        state->system_font = LoadFont(&state->assets, "data/ubuntu.ttf");
+
+        state->glow_image = LoadImage(&state->assets, "data/glow2.png");
+        state->shadow_image = LoadImage(&state->assets, "data/shadow.png");
         state->board_image = LoadImage(&state->assets, "data/board.png");
         Assert(IsValid(state->board_image));
 
         Player *player = &state->players[0];
-        for (u32 it = 0; it < ArrayCount(player->cards); ++it) {
-            player->cards[it] = GetCard(&state->card_index, cast(Card_Type) RandomChoice(CardType_Count));
+        player->type = PlayerType_Human;
+        player->deck[0] = GetCard(&state->card_index, CardType_BlackHole);
+        for (u32 it = 1; it < ArrayCount(player->deck); ++it) {
+            Card_Type type;
+            do {
+                type = cast(Card_Type) RandomChoice(CardType_Count);
+            }
+            while (type == CardType_Back);
+
+            player->deck[it] = GetCard(&state->card_index, type);
         }
 
-        player->health = 0;
-        player->mana = 10;
-        player->max_mana = 10;
-        player->card_count = 10;
+        player->health = 20;
+        player->max_mana = 0;
+
+        Player *enemy = &state->players[1];
+        enemy->health = 20;
+        enemy->type = PlayerType_Computer;
+        enemy->deck[0] = GetCard(&state->card_index, CardType_OwnInterests);
+        for (u32 it = 1; it < ArrayCount(enemy->deck); ++it) {
+            Card_Type type;
+            do {
+                type = cast(Card_Type) RandomChoice(CardType_Count);
+            }
+            while (type == CardType_Back);
+
+//            Card_Type c_type = (it & 1) ? CardType_PlayingDumb : CardType_Sacrifice;
+            enemy->deck[it] = GetCard(&state->card_index, type);
+        }
+
 
         // @Todo: Maybe this should just be stored directly in the Board_State dunno if we'll need it
         // elsewhere
         state->board.card_index = &state->card_index;
+        state->board.phase = TurnPhase_Draw;
 
         state->initialised = true;
     }
 
-    Game_Controller *keyboard = &input->keyboard;
-
-    Board_State *board = &state->board;
-
-    Player *player = &state->players[board->current_player_turn];
-    Player *enemy  = &state->players[1 - board->current_player_turn];
-    enemy->card_count = 1;
-
-    Assert(player->health >= 0);
-
-    switch (board->phase) {
-        case TurnPhase_Draw: {
-        }
-        break;
-        case TurnPhase_Play: {
-        }
-        break;
-        case TurnPhase_End: {
-        }
-        break;
-    }
-
     // Draw the board
+    // @Note: This happens regardless of phase or turn so might as well do it right away
     sfRectangleShape *board_shape = sfRectangleShape_create();
     sfRectangleShape_setPosition(board_shape, V2(0, 0));
     sfRectangleShape_setSize(board_shape, global_view_size);
@@ -130,326 +739,19 @@ internal void LudumUpdateRender(Game_State *state, Game_Input *input) {
 
     sfRectangleShape_destroy(board_shape);
 
-    sfVector2u image_size = sfTexture_getSize(GetImage(&state->assets, state->card_index.cards[0].image));
-    v2 size = V2(0.5f * image_size.x, 0.5f * image_size.y);
-
-    sfRectangleShape *shape = sfRectangleShape_create();
-    sfRectangleShape_setSize(shape, size);
-    sfRectangleShape_setOrigin(shape, V2(size.x * 0.5f, size.y));
-
-    v2 position = V2(global_view_size.x * 0.5f, global_view_size.y - (0.25f * size.y));
-    sfRectangleShape_setPosition(shape, position);
-
-    if (JustPressed(keyboard->card_slot_3)) {
-        u32 cc = player->card_count;
-        cc = (cc + 1) % 11;
-        player->card_count = cc;
-    }
-
-    u32 card_count = player->card_count;
-    u32 passes = 0;
-    f32 starting_offset = -40;
-    if (card_count & 1) {
-        starting_offset = 60;
-       passes = (card_count - 1) / 2;
-    }
-    else { passes = (card_count / 2); }
-
-    Card_Transform transforms[card_count];
-
-    // @Note: These are used to configure the card fan
-    f32 angle_offset = 5;
-    v2  position_offset = V2(80, 0); // V2(80, 20);
-
-    // Check for mouse hover
-    s32 running_card_index = 0;
-    s32 highest_hovered_card = -1;
-    v2 mouse_pos = input->mouse_position;
-
-    // Left hand side of the fan
-    for (s32 it = passes; it > 0; --it) {
-        Card_Transform *tx = &transforms[running_card_index];
-
-        tx->angle = Radians(-angle_offset * it);
-        tx->offset = V2(-starting_offset - position_offset.x * it, -position_offset.y * ((passes - it) + 1));
-
-        v2 axes = V2(Sin(tx->angle), -Cos(tx->angle));
-
-        tx->offset += ((it + 1) * -20.0f) * axes;
-
-        v2 centre = position + tx->offset + (0.5f * size.y) * axes;
-        v2 rotated_mouse = V2(
-                Cos(-tx->angle) * (mouse_pos.x - centre.x) - Sin(-tx->angle) * (mouse_pos.y - centre.y),
-                Sin(-tx->angle) * (mouse_pos.x - centre.x) + Cos(-tx->angle) * (mouse_pos.y - centre.y));
-
-        if (Abs(rotated_mouse.x) < (size.x * 0.5f) && Abs(rotated_mouse.y) < (size.y * 0.5f)) {
-            highest_hovered_card = running_card_index;
+    Board_State *board = &state->board;
+    switch (board->phase) {
+        case TurnPhase_Draw: {
+            ExecuteDrawPhase(state, board, input);
         }
-
-        running_card_index++;
-    }
-
-    local f32 test = 80.0f;
-    if (JustPressed(keyboard->card_slot_4)) { test += 10; }
-    else if (JustPressed(keyboard->card_slot_5)) { test -= 10; }
-
-    // Centre card if there are an odd number
-    if (card_count & 1) {
-        Card_Transform *tx = &transforms[running_card_index];
-
-        tx->angle = 0;
-        tx->offset = V2(0, 30);
-
-        v2 centre = position + tx->offset - V2(0, 0.5f * size.y);
-        v2 rotated_mouse = mouse_pos - centre;
-
-        if (Abs(rotated_mouse.x) < (size.x * 0.5f) && Abs(rotated_mouse.y) < (size.y * 0.5f)) {
-            highest_hovered_card = running_card_index;
+        break;
+        case TurnPhase_Play: {
+            ExecutePlayPhase(state, board, input);
         }
-
-        running_card_index++;
-    }
-
-    // Right hand side of the fan
-    for (u32 it = 1; it <= passes; ++it) {
-        Card_Transform *tx = &transforms[running_card_index];
-
-        tx->angle = Radians(angle_offset * it);
-        tx->offset = V2(starting_offset + position_offset.x * it, -position_offset.y * ((passes - it) + 1));
-
-        v2 axes = V2(Sin(tx->angle), -Cos(tx->angle));
-
-        tx->offset += ((it + 1) * -20.0f) * axes;
-
-        v2 centre = position + tx->offset + (0.5f * size.y) * axes;
-        v2 rotated_mouse = V2(
-                Cos(-tx->angle) * (mouse_pos.x - centre.x) - Sin(-tx->angle) * (mouse_pos.y - centre.y),
-                Sin(-tx->angle) * (mouse_pos.x - centre.x) + Cos(-tx->angle) * (mouse_pos.y - centre.y));
-
-        if (Abs(rotated_mouse.x) < (size.x * 0.5f) && Abs(rotated_mouse.y) < (size.y * 0.5f)) {
-            highest_hovered_card = running_card_index;
+        break;
+        case TurnPhase_End: {
+            ExecuteEndPhase(state, board, input);
         }
-
-        running_card_index++;
+        break;
     }
-
-    // Render Card Fan
-
-    // @Hack: Just to get the dragging index instead of highest hover to prevent if from being rendererd
-    if (state->dragging) { highest_hovered_card = state->dragging_index; }
-
-    running_card_index = 0;
-    // Left hand side of the fan
-    for (s32 it = passes; it > 0; --it) {
-        if (running_card_index != highest_hovered_card) {
-            Card *card = &player->cards[running_card_index];
-            Card_Transform *tx = &transforms[running_card_index];
-
-            sfRectangleShape_setPosition(shape, position + tx->offset);
-            sfRectangleShape_setRotation(shape, Degrees(tx->angle));
-
-            sfRectangleShape_setTexture(shape, GetImage(&state->assets, card->image), true);
-
-            sfRenderWindow_drawRectangleShape(global_window, shape, 0);
-
-            sfRectangleShape_setRotation(shape, 180 + Degrees(tx->angle));
-            sfRectangleShape_setPosition(shape, (global_view_size - position) - tx->offset);
-            sfRectangleShape_setTexture(shape,
-                    GetImage(&state->assets, board->card_index->cards[CardType_Back].image), true);
-
-            sfRenderWindow_drawRectangleShape(global_window, shape, 0);
-
-            v2 axes = (0.5f * size.y) * V2(Sin(tx->angle), -Cos(tx->angle));
-            v2 centre = position + tx->offset + axes;
-
-            sfCircleShape *c_shape = sfCircleShape_create();
-            sfCircleShape_setRadius(c_shape, 10);
-            sfCircleShape_setOrigin(c_shape, V2(10, 10));
-            sfCircleShape_setFillColor(c_shape, sfMagenta);
-            sfCircleShape_setPosition(c_shape, centre);
-            sfRenderWindow_drawCircleShape(global_window, c_shape, 0);
-
-            sfRectangleShape *bbox = sfRectangleShape_create();
-            sfRectangleShape_setOrigin(bbox, 0.5f * size);
-            sfRectangleShape_setSize(bbox, size);
-            sfRectangleShape_setPosition(bbox, centre);
-            sfRectangleShape_setFillColor(bbox, sfTransparent);
-            sfRectangleShape_setOutlineColor(bbox, sfBlue);
-            sfRectangleShape_setOutlineThickness(bbox, 3);
-            sfRectangleShape_setRotation(bbox, Degrees(tx->angle));
-
-            sfRenderWindow_drawRectangleShape(global_window, bbox, 0);
-
-            sfRectangleShape_destroy(bbox);
-
-            sfCircleShape_destroy(c_shape);
-        }
-
-        running_card_index++;
-    }
-
-    // Centre card if there is one
-    if (card_count & 1) {
-        if (running_card_index != highest_hovered_card) {
-            Card *card = &player->cards[running_card_index];
-            Card_Transform *tx = &transforms[running_card_index];
-
-            sfRectangleShape_setRotation(shape, 0);
-            sfRectangleShape_setPosition(shape, position + tx->offset);
-            sfRectangleShape_setTexture(shape, GetImage(&state->assets, card->image), true);
-            sfRenderWindow_drawRectangleShape(global_window, shape, 0);
-
-            sfRectangleShape_setRotation(shape, 180);
-            sfRectangleShape_setPosition(shape, (global_view_size - position) - tx->offset);
-            sfRectangleShape_setTexture(shape,
-                    GetImage(&state->assets, board->card_index->cards[CardType_Back].image), true);
-
-            sfRenderWindow_drawRectangleShape(global_window, shape, 0);
-
-
-            v2 centre = position + tx->offset - V2(0, 0.5f * size.y);
-
-            sfCircleShape *c_shape = sfCircleShape_create();
-            sfCircleShape_setRadius(c_shape, 10);
-            sfCircleShape_setOrigin(c_shape, V2(10, 10));
-            sfCircleShape_setFillColor(c_shape, sfMagenta);
-            sfCircleShape_setPosition(c_shape, centre);
-            sfRenderWindow_drawCircleShape(global_window, c_shape, 0);
-
-            sfRectangleShape *bbox = sfRectangleShape_create();
-            sfRectangleShape_setOrigin(bbox, 0.5f * size);
-            sfRectangleShape_setSize(bbox, size);
-            sfRectangleShape_setPosition(bbox, centre);
-            sfRectangleShape_setFillColor(bbox, sfTransparent);
-            sfRectangleShape_setOutlineColor(bbox, sfBlue);
-            sfRectangleShape_setOutlineThickness(bbox, 3);
-            sfRectangleShape_setRotation(bbox, Degrees(tx->angle));
-
-            sfRenderWindow_drawRectangleShape(global_window, bbox, 0);
-
-            sfRectangleShape_destroy(bbox);
-            sfCircleShape_destroy(c_shape);
-        }
-
-        running_card_index++;
-    }
-
-    // Right hand side of the fan
-    for (s32 it = 1; it <= passes; ++it) {
-        if (running_card_index != highest_hovered_card) {
-            Card *card = &player->cards[running_card_index];
-            Card_Transform *tx = &transforms[running_card_index];
-
-            v2 axes = (0.5f * size.y) * V2(Sin(tx->angle), -Cos(tx->angle));
-            v2 centre = position + tx->offset + axes;
-
-            sfRectangleShape_setPosition(shape, position + tx->offset);
-            sfRectangleShape_setRotation(shape, Degrees(tx->angle));
-
-            sfRectangleShape_setTexture(shape, GetImage(&state->assets, card->image), true);
-
-            sfRenderWindow_drawRectangleShape(global_window, shape, 0);
-
-            sfRectangleShape_setRotation(shape, 180 + Degrees(tx->angle));
-            sfRectangleShape_setPosition(shape, (global_view_size - position) - tx->offset);
-            sfRectangleShape_setTexture(shape,
-                    GetImage(&state->assets, board->card_index->cards[CardType_Back].image), true);
-
-            sfRenderWindow_drawRectangleShape(global_window, shape, 0);
-
-            sfCircleShape *c_shape = sfCircleShape_create();
-            sfCircleShape_setRadius(c_shape, 10);
-            sfCircleShape_setOrigin(c_shape, V2(10, 10));
-            sfCircleShape_setFillColor(c_shape, sfMagenta);
-            sfCircleShape_setPosition(c_shape, centre);
-            sfRenderWindow_drawCircleShape(global_window, c_shape, 0);
-
-            sfRectangleShape *bbox = sfRectangleShape_create();
-            sfRectangleShape_setOrigin(bbox, 0.5f * size);
-            sfRectangleShape_setSize(bbox, size);
-            sfRectangleShape_setPosition(bbox, centre);
-            sfRectangleShape_setFillColor(bbox, sfTransparent);
-            sfRectangleShape_setOutlineColor(bbox, sfBlue);
-            sfRectangleShape_setOutlineThickness(bbox, 3);
-            sfRectangleShape_setRotation(bbox, Degrees(tx->angle));
-
-            sfRenderWindow_drawRectangleShape(global_window, bbox, 0);
-
-            sfRectangleShape_destroy(bbox);
-
-            sfCircleShape_destroy(c_shape);
-        }
-
-        running_card_index++;
-    }
-
-
-    Assert(running_card_index <= 10);
-
-    // Show the card that is being hovered
-    if (!state->dragging && highest_hovered_card != -1) {
-        Card *card = &player->cards[highest_hovered_card];
-        Card_Transform *tx = &transforms[highest_hovered_card];
-
-        if (JustPressed(input->mouse_buttons[0])) {
-            state->dragging = true;
-            state->dragging_index = highest_hovered_card;
-        }
-        else {
-            sfRectangleShape_setOrigin(shape, 0.5f * size);
-            sfRectangleShape_setSize(shape, 2 * size);
-
-            sfRectangleShape_setOrigin(shape, V2(0.5f * size.x, 2 * size.y));
-            sfRectangleShape_setPosition(shape, position + tx->offset - V2(100, 0));
-            sfRectangleShape_setRotation(shape, 0);
-            sfRectangleShape_setTexture(shape, GetImage(&state->assets, card->image), true);
-            sfRenderWindow_drawRectangleShape(global_window, shape, 0);
-        }
-    }
-
-    if (state->dragging) {
-        Card *card = &player->cards[highest_hovered_card];
-
-        sfRectangleShape_setOrigin(shape, size);
-        sfRectangleShape_setRotation(shape, 0);
-        sfRectangleShape_setSize(shape, 2 * size);
-        sfRectangleShape_setPosition(shape, input->mouse_position);
-        sfRectangleShape_setTexture(shape, GetImage(&state->assets, card->image), true);
-        sfRenderWindow_drawRectangleShape(global_window, shape, 0);
-
-        if (!IsPressed(input->mouse_buttons[0])) {
-            state->dragging = false;
-            state->dragging_index = -1;
-
-            if (input->mouse_position.y < (0.5f * global_view_size.y)) {
-                printf("[Info] Player used card!\n");
-
-                bool used = UseCard(board, player, &state->players[1], card);
-
-                // @Todo: Maybe this should occur before Execute is called on the card
-                if (used) {
-                    for (u32 it = highest_hovered_card; it < player->card_count - 1; ++it) {
-                        Card c = player->cards[it + 1];
-                        player->cards[it] = c;
-                    }
-
-                    player->card_count--;
-                }
-            }
-        }
-    }
-
-    if (IsPressed(keyboard->menu)) { input->requested_quit = true; }
-
-    if (JustPressed(keyboard->card_slot_1)) {
-        sfVector2u size = { 1600, 900 };
-        sfRenderWindow_setSize(global_window, size);
-    }
-
-    if (JustPressed(keyboard->card_slot_2)) {
-        sfVector2u size = { 1280, 720 };
-        sfRenderWindow_setSize(global_window, size);
-    }
-
-    sfRectangleShape_destroy(shape);
 }

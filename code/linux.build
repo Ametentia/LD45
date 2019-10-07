@@ -5,6 +5,9 @@ then
     mkdir "../build"
 fi
 
+echo "    \"data/cards/back.png\"," > "../code/Generated_Texture_Names.include"
+find ../data/cards -name "*.png" -printf "    \"data/cards/%P\",\n" | grep -v "back.png" | sort >> "../code/Generated_Texture_Names.include"
+
 pushd "../build" > /dev/null
 
 COMMON_CXX_FLAGS="-O0 -g -ggdb -Wno-writable-strings -Wno-switch"

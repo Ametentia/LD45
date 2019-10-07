@@ -14,10 +14,11 @@ union Game_Controller {
         Game_Button card_slot_4;
         Game_Button card_slot_5;
 
+        Game_Button confirm;
         Game_Button menu;
     };
 
-    Game_Button buttons[6];
+    Game_Button buttons[7];
 };
 
 struct Game_Input {

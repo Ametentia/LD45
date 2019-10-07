@@ -9,6 +9,7 @@
 #include "Ludum_Assets.h"
 struct Card_Transform {
     v2 offset;
+    v2 axes;
     f32 angle;
 };
 
@@ -23,10 +24,14 @@ typedef CARD_EFFECT(Card_Effect);
 enum Card_Status_Flags {
     CardStatus_Hidden = 0x1, // Player can't see this card (The back will be shown instead)
     CardStatus_Frozen = 0x2, // Player can't use this card
+    CardStatus_Selected = 0x4, // Selected for card transfer (i.e. in Altruism etc.)
 };
 
 enum Card_Type {
     CardType_Back = 0,
+    CardType_AlternateReality,
+    CardType_Altruism,
+    CardType_BallAndChain,
     CardType_BestIntentions,
     CardType_BlackHole,
     CardType_BloodPact,
@@ -35,17 +40,23 @@ enum Card_Type {
     CardType_DarkRitual,
     CardType_DarknessOfSpace,
     CardType_DevilsWheel,
+    CardType_EventHorizon,
+    CardType_ForcedSalvation,
     CardType_GravitationalPull,
     CardType_LuckyFeeling,
     CardType_NostalgiaTrip,
     CardType_OwnInterests,
+    CardType_Pebbles,
     CardType_PlayingDumb,
+    CardType_Premonition,
     CardType_PureAnarchy,
+    CardType_Recursion,
     CardType_Rewind,
     CardType_Sacrifice,
     CardType_SapLife,
     CardType_SpaceDebris,
     CardType_TimeBomb,
+    CardType_TimeHealsAllWounds,
     CardType_UnendingTorment,
     CardType_WormHole,
 
@@ -71,11 +82,33 @@ struct Card_Index {
     Card cards[CardType_Count];
 };
 
+enum Player_State_Flags {
+    PlayerState_Selecting = 0x1,
+    PlayerState_ViewingHand = 0x2,
+    PlayerState_ViewingDraw = 0x4,
+    PlayerState_RemovingHand = 0x8,
+    PlayerState_ToEnemy = 0x10,
+    PlayerState_FromEnemy = 0x20,
+    PlayerState_ViewingCards = (PlayerState_Selecting | PlayerState_ViewingHand | PlayerState_ViewingDraw)
+};
+
+enum Player_Type {
+    PlayerType_Human = 0,
+    PlayerType_Computer,
+};
+
 struct Player {
+    Player_Type type;
+
     s32 health;
+    s32 last_turn_health;
 
     u32 mana;
     u32 max_mana;
+
+    u32 state_flags;
+    u32 select_card_count;
+    u32 current_selected_count;
 
     // @Note: These are Card_Status_Flags that are placed on newly drawn cards. They are cleared after the
     // draw phase of the players turn
@@ -84,17 +117,20 @@ struct Player {
 
     u32 next_draw_count;
     u32 card_count;
-    Card cards[10]; // @Todo: This may be better as a linked list
+    Card cards[30]; // @Todo: This may be better as a linked list
 
-    u32 current_card_index;
+    u32 next_card_index; // @Note: The next card to draw
     s32 cards_left;
     Card deck[24];
 
+    u32 turn_used_count;
     u32 last_turn_used_count;
     u32 graveyard_next;
-    Card graveyard[ArrayCount(Player::deck)];
-};
+    Card graveyard[100];
 
+    u32 active_card_count;
+    Card_Type active_cards[20];
+};
 
 enum Turn_Phase {
     TurnPhase_Draw = 0,
@@ -106,7 +142,10 @@ struct Board_State {
     u32 current_player_turn;
     Turn_Phase phase;
 
-    s32 sacrafice_damage_this_turn;
+    s32 damage_last_turn; // Copied from damage_this_turn
+    s32 sacrifice_damage_last_turn;
+
+    s32 sacrifice_damage_this_turn;
     s32 damage_this_turn;
 
     Card_Index *card_index;
@@ -119,9 +158,14 @@ struct Game_State {
     Card_Index card_index;
     Board_State board;
 
+    Image_Handle glow_image;
+    Image_Handle shadow_image;
     Image_Handle board_image;
 
-    Player players[2];
+    Font_Handle system_font;
+
+    // @Note: There are always 2 players
+    Player *players;
     s32 dragging_index;
     bool dragging;
 };
